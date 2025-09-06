@@ -103,6 +103,37 @@
 				padding: 12px;
 			}
 
+			/* Preview bar */
+			.preview {
+				display: none; /* shown by JS when preview URL available */
+				align-items: center;
+				gap: 12px;
+				margin: 0 12px 8px;
+				padding: 10px 12px;
+				background: var(--btn-bg);
+				border: 1px solid var(--border);
+				border-radius: 12px;
+			}
+			.preview .pp {
+				border: 1px solid var(--border);
+				background: #0f0f0f;
+				color: var(--text);
+				padding: 8px 12px;
+				font-size: 13px;
+				border-radius: 10px;
+				cursor: pointer;
+				transition: background .15s ease;
+			}
+			.preview .pp:hover { background: var(--btn-hover); }
+			.preview .meta {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				color: var(--muted);
+				font-size: 12px;
+				white-space: nowrap;
+			}
+
 					.row {
 						display: flex;
 						align-items: center;
@@ -127,8 +158,12 @@
 				min-width: 0; /* prevent overflow */
 			}
 			.service .logo {
-				width: 28px; height: 28px; flex: 0 0 28px;
+				height: 28px;
+				flex: 0 0 auto;
+				display: inline-flex;
+				align-items: center;
 			}
+			.service .logo img { height: 100%; width: auto; display: block; }
 			.service .name { font-weight: 600; letter-spacing: .2px; }
 
 			.action {
@@ -177,6 +212,14 @@
 					<h1 id="trackTitle">Август</h1>
 					<p>Choose your preferred music service</p>
 				</header>
+				<div id="preview" class="preview" aria-label="Audio preview">
+					<button id="previewBtn" class="pp" type="button">Play preview</button>
+					<div class="meta">
+						<span id="previewLabel">Preview</span>
+						<span id="previewTime">0:00</span>
+					</div>
+					<audio id="previewAudio" preload="metadata"></audio>
+				</div>
 				<div id="services" class="list" role="list"></div>
 				<div class="footer">
 					<span id="releaseYear"></span>
@@ -191,6 +234,7 @@
     artwork: './cover.jpg',
     artworkHref: '#',
     year: new Date().getFullYear(),
+	preview: { url: './preview.mp3', start: 0, duration: 30 },
     services: [
       { id: 'spotify', name: 'Spotify', url: 'https://open.spotify.com/album/6bA7x9AodEANu1Yq6rInCu', action: 'play' },
       { id: 'applemusic', name: 'Apple Music', url: 'https://geo.music.apple.com/us/album/%D0%B0%D0%B2%D0%B3%D1%83%D1%81%D1%82-single/1834973006?app=itunes&ls=1', action: 'play' },
@@ -205,10 +249,10 @@
   };
 
   // Tiny i18n for action labels
-  const I18N = {
-    ru: { play: 'Слушать', download: 'Скачать' },
-    en: { play: 'Play', download: 'Download' }
-  };
+	const I18N = {
+		ru: { play: 'Слушать', download: 'Скачать', previewPlay: 'Прослушать фрагмент', previewPause: 'Пауза', previewLabel: 'Фрагмент' },
+		en: { play: 'Play', download: 'Download',    previewPlay: 'Play preview',             previewPause: 'Pause', previewLabel: 'Preview' }
+	};
 
   // Detect language: URL (?lang=ru|en) -> localStorage -> browser prefs
   function detectLang() {
@@ -279,6 +323,85 @@ document.documentElement.lang = lang;
   artImg.alt = `Обложка — ${CONFIG.title || ''}`.trim();
   if (CONFIG.artworkHref && CONFIG.artworkHref !== '#') { artLink.href = CONFIG.artworkHref; }
   yearEl.textContent = CONFIG.year ? `© ${CONFIG.year}` : '';
+
+	// Preview helpers and wiring
+	function fmtTime(sec) {
+		sec = Math.max(0, Math.floor(sec));
+		const m = Math.floor(sec / 60);
+		const s = sec % 60;
+		return `${m}:${s.toString().padStart(2, '0')}`;
+	}
+
+	(function initPreview() {
+		const cfg = CONFIG.preview || {};
+		if (!cfg.url) return;
+
+		const wrap = document.getElementById('preview');
+		const btn = document.getElementById('previewBtn');
+		const timeEl = document.getElementById('previewTime');
+		const labelEl = document.getElementById('previewLabel');
+		const audio = document.getElementById('previewAudio');
+
+		if (!wrap || !btn || !timeEl || !labelEl || !audio) return;
+
+		// Localize
+		btn.textContent = (t.previewPlay || 'Play preview');
+		labelEl.textContent = (t.previewLabel || 'Preview');
+
+		audio.src = cfg.url;
+		audio.preload = 'metadata';
+		wrap.style.display = 'flex';
+
+		const start = Number.isFinite(cfg.start) ? Math.max(0, cfg.start) : 0;
+		const duration = Number.isFinite(cfg.duration) ? Math.max(1, cfg.duration) : 30;
+		let ticking = null;
+
+		function setBtn(playing) {
+			btn.textContent = playing ? (t.previewPause || 'Pause') : (t.previewPlay || 'Play preview');
+			btn.setAttribute('aria-pressed', playing ? 'true' : 'false');
+		}
+		function stopTick() { if (ticking) { clearInterval(ticking); ticking = null; } }
+		function clampStopIfNeeded() {
+			const endAt = start + duration;
+			if (audio.currentTime >= endAt - 0.05) {
+				audio.pause();
+				audio.currentTime = start;
+				setBtn(false);
+				stopTick();
+				timeEl.textContent = fmtTime(0);
+			}
+		}
+
+		audio.addEventListener('loadedmetadata', () => { timeEl.textContent = fmtTime(0); });
+		audio.addEventListener('ended', () => {
+			setBtn(false);
+			stopTick();
+			timeEl.textContent = fmtTime(0);
+			audio.currentTime = start;
+		});
+
+		btn.addEventListener('click', async () => {
+			try {
+				if (audio.paused) {
+					if (Math.abs(audio.currentTime - start) > 0.25) audio.currentTime = start;
+					await audio.play();
+					setBtn(true);
+					stopTick();
+					ticking = setInterval(() => {
+						const elapsed = Math.max(0, audio.currentTime - start);
+						timeEl.textContent = fmtTime(elapsed);
+						clampStopIfNeeded();
+					}, 200);
+				} else {
+					audio.pause();
+					setBtn(false);
+					stopTick();
+				}
+			} catch (e) {
+				console.warn('Preview playback failed:', e);
+			}
+		});
+	})();
 
   function makeLogo(id) {
     const span = document.createElement('span');
