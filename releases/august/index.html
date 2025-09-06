@@ -64,7 +64,7 @@
 					destination: dest
 				}
 				fbq('track','ViewContent', fbqEventParameters);
-				console.log('fbq ViewContent ===>', fbqEventParameters);
+				fbq('trackCustom','StreamClick',{content_type:'stream', content_name:svc, destination:dest});
 			}
 
 			if (window.ttq) ttq.track('ClickButton',{
