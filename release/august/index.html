@@ -200,7 +200,7 @@
       { id: 'ytmusic',      name: 'YouTube Music',  url: 'https://music.youtube.com/playlist?list=OLAK5uy_mKZpd1L5kNz-sSM-nY5GZ0-tXW9gyvISg&si=MkYTlkpG68GG4oly',      action: 'play' },
 
       // Nice-to-have (geo)
-      { id: 'deezer2',       name: 'Deezer',         url: 'https://www.deezer.com/album/813570131',         action: 'play' },
+      { id: 'deezer',       name: 'Deezer',         url: 'https://www.deezer.com/album/813570131',         action: 'play' },
       { id: 'tidal',        name: 'Tidal',          url: 'http://www.tidal.com/album/455759856',              action: 'play' },
       { id: 'amazonmusic',  name: 'Amazon Music',   url: 'https://music.amazon.com/albums/B0FNDTVHXT?ref=dm_ff_amazonmusic_3p',       action: 'play' },
 
@@ -227,8 +227,8 @@
     span.className = 'logo';
 
     const img = document.createElement('img');
-    img.width = 28; img.height = 28;
-    img.decoding = 'async'; img.loading = 'lazy';
+    img.decoding = 'async';
+    img.loading = 'lazy';
     img.alt = '';
 
     const sources = [
@@ -242,11 +242,8 @@
     let i = 0;
     img.onerror = () => {
       i += 1;
-      if (i < sources.length) {
-        img.src = sources[i];
-      } else {
-        img.onerror = null;
-      }
+      if (i < sources.length) img.src = sources[i];
+      else img.onerror = null;
     };
     img.src = sources[i];
 
