@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="ru">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+		<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+		<title>Август — слушать</title>
+		<meta name="description" content="Выберите любимый стриминговый сервис, чтобы послушать трек ‘Август’." />
+		<!-- Social preview -->
+		<meta property="og:type" content="website" />
+		<meta property="og:title" content="Август — слушать" />
+		<meta property="og:description" content="Выберите любимый стриминговый сервис, чтобы послушать трек ‘Август’." />
+		<meta property="og:image" content="./cover.jpg" />
+		<meta property="og:url" content="" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="theme-color" content="#0b0b0b" />
+
+		<style>
+			/* CSS reset (small, x-browser) */
+			*, *::before, *::after { box-sizing: border-box; }
+			html, body { height: 100%; }
+			body { margin: 0; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+			img { max-width: 100%; display: block; }
+			button { font: inherit; }
+
+			:root {
+				--bg: #0b0b0b;
+				--card: #141414;
+				--text: #eaeaea;
+				--muted: #b9b9b9;
+				--border: rgba(255,255,255,0.08);
+				--accent: #ffffff;
+				--radius: 14px;
+				--shadow: 0 10px 24px rgba(0,0,0,0.45);
+				--btn-bg: #1d1d1d;
+				--btn-hover: #262626;
+			}
+
+			body {
+				background: radial-gradient(1200px 800px at 10% -10%, rgba(255,255,255,0.05), transparent 60%),
+										radial-gradient(1000px 700px at 110% 10%, rgba(255,255,255,0.05), transparent 60%),
+										var(--bg);
+				color: var(--text);
+				font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell,
+					Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+				line-height: 1.5;
+			}
+
+			.wrap {
+				min-height: 100svh;
+				display: grid;
+				place-items: center;
+				padding: 24px 16px;
+			}
+
+			.card {
+				width: 100%;
+				max-width: 520px;
+				background: var(--card);
+				border: 1px solid var(--border);
+				border-radius: var(--radius);
+				overflow: hidden;
+				box-shadow: var(--shadow);
+			}
+
+			.artwork {
+				position: relative;
+				background: #0f0f0f;
+				aspect-ratio: 16 / 9;
+				overflow: hidden;
+			}
+
+			.artwork img {
+				width: 100%;
+				height: 100%;
+				object-fit: cover;
+			}
+
+			.titlebar {
+				display: flex;
+				flex-direction: column;
+				gap: 6px;
+				padding: 18px 16px;
+				background: linear-gradient(180deg, rgba(0,0,0,0.45), rgba(0,0,0,0.45));
+				border-top: 1px solid var(--border);
+			}
+
+			.titlebar h1 {
+				margin: 0;
+				font-size: clamp(18px, 2.4vw + 12px, 24px);
+				font-weight: 700;
+				letter-spacing: 0.2px;
+			}
+			.titlebar p {
+				margin: 0;
+				color: var(--muted);
+				font-size: 13px;
+			}
+
+			.list {
+				display: grid;
+				gap: 10px;
+				padding: 12px;
+			}
+
+					.row {
+						display: flex;
+						align-items: center;
+						justify-content: space-between;
+						gap: 12px;
+						background: #101010;
+						border: 1px solid var(--border);
+						border-radius: 12px;
+						padding: 12px;
+						text-decoration: none; /* anchor reset */
+						color: inherit;
+						transition: background .15s ease, border-color .15s ease, transform .02s ease;
+					}
+					.row:hover { background: #121212; border-color: rgba(255,255,255,0.14); }
+					.row:active { transform: translateY(1px); }
+					.row:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; }
+
+			.service {
+				display: flex;
+				align-items: center;
+				gap: 12px;
+				min-width: 0; /* prevent overflow */
+			}
+			.service .logo {
+				width: 28px; height: 28px; flex: 0 0 28px;
+			}
+			.service .name { font-weight: 600; letter-spacing: .2px; }
+
+			.action {
+				margin-left: auto;
+			}
+					.btn {
+						display: inline-block;
+						border: 1px solid var(--border);
+						background: var(--btn-bg);
+						color: var(--text);
+						padding: 8px 12px;
+						font-size: 13px;
+						border-radius: 10px;
+						transition: background .15s ease;
+						pointer-events: none; /* the whole row is clickable */
+					}
+					.row:hover .btn { background: var(--btn-hover); }
+
+			.footer {
+				color: var(--muted);
+				text-align: center;
+				font-size: 12px;
+				padding: 6px 0 12px;
+			}
+
+			@media (prefers-color-scheme: light) {
+				:root {
+					--bg: #f6f6f6;
+					--card: #ffffff;
+					--text: #1a1a1a;
+					--muted: #4b4b4b;
+					--border: rgba(0,0,0,0.08);
+					--btn-bg: #f1f1f1;
+					--btn-hover: #e9e9e9;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<main class="wrap">
+			<article class="card" role="region" aria-label="Альбом и ссылки на сервисы">
+				<a id="artworkLink" class="artwork" href="#" target="_blank" rel="noopener">
+					<img id="artworkImg" src="./cover.jpg" alt="Обложка — Август" loading="eager" />
+				</a>
+				<header class="titlebar">
+					<h1 id="trackTitle">Август</h1>
+					<p>Choose your preferred music service</p>
+				</header>
+				<div id="services" class="list" role="list"></div>
+				<div class="footer">
+					<span id="releaseYear"></span>
+				</div>
+			</article>
+		</main>
+
+		<script>
+  // Configuration: replace URLs with your actual links.
+  const CONFIG = {
+    title: 'Август',
+    artwork: './cover.jpg', // Put cover.jpg next to this file
+    artworkHref: '#',        // Optional: click on artwork goes to your primary link
+    year: new Date().getFullYear(),
+    services: [
+      // Must-have
+      { id: 'spotify',      name: 'Spotify',        url: 'https://open.spotify.com/album/6bA7x9AodEANu1Yq6rInCu',       action: 'play' },
+      { id: 'applemusic',   name: 'Apple Music',    url: 'https://geo.music.apple.com/us/album/%D0%B0%D0%B2%D0%B3%D1%83%D1%81%D1%82-single/1834973006?app=itunes&ls=1',        action: 'play' },
+      { id: 'yandexmusic',  name: 'Яндекс Музыка',  url: 'https://music.yandex.ru/track/142213433?utm_source=web&utm_medium=copy_link',        action: 'play' },
+      { id: 'vk',           name: 'VK Музыка',      url: 'https://vk.com/audio474499146_456916422_9604c2218ff4019301',            action: 'play' },
+      { id: 'ytmusic',      name: 'YouTube Music',  url: 'https://music.youtube.com/playlist?list=OLAK5uy_mKZpd1L5kNz-sSM-nY5GZ0-tXW9gyvISg&si=MkYTlkpG68GG4oly',      action: 'play' },
+
+      // Nice-to-have (geo)
+      { id: 'deezer2',       name: 'Deezer',         url: 'https://www.deezer.com/album/813570131',         action: 'play' },
+      { id: 'tidal',        name: 'Tidal',          url: 'http://www.tidal.com/album/455759856',              action: 'play' },
+      { id: 'amazonmusic',  name: 'Amazon Music',   url: 'https://music.amazon.com/albums/B0FNDTVHXT?ref=dm_ff_amazonmusic_3p',       action: 'play' },
+
+      // Optional (scenario)
+      { id: 'soundcloud',   name: 'SoundCloud',     url: 'https://soundcloud.com/dipnaked-music/avgust?utm_source=clipboard&utm_medium=text&utm_campaign=social_sharing',         action: 'play' }
+    ]
+  };
+
+  const $ = (sel) => document.querySelector(sel);
+  const servicesEl = $('#services');
+  const titleEl = $('#trackTitle');
+  const artImg = $('#artworkImg');
+  const artLink = $('#artworkLink');
+  const yearEl = $('#releaseYear');
+
+  titleEl.textContent = CONFIG.title || '—';
+  artImg.src = CONFIG.artwork || './cover.jpg';
+  artImg.alt = `Обложка — ${CONFIG.title || ''}`.trim();
+  if (CONFIG.artworkHref && CONFIG.artworkHref !== '#') { artLink.href = CONFIG.artworkHref; }
+  yearEl.textContent = CONFIG.year ? `© ${CONFIG.year}` : '';
+
+  function makeLogo(id) {
+    const span = document.createElement('span');
+    span.className = 'logo';
+
+    const img = document.createElement('img');
+    img.width = 28; img.height = 28;
+    img.decoding = 'async'; img.loading = 'lazy';
+    img.alt = '';
+
+    const sources = [
+      `/assets/icons/${id}.svg`,
+      `/assets/icons/${id}.png`,
+      `/assets/icons/${id}.webp`,
+      `/assets/icons/default.svg`,
+      `/assets/icons/default.png`
+    ];
+
+    let i = 0;
+    img.onerror = () => {
+      i += 1;
+      if (i < sources.length) {
+        img.src = sources[i];
+      } else {
+        img.onerror = null;
+      }
+    };
+    img.src = sources[i];
+
+    span.appendChild(img);
+    return span;
+  }
+
+  function row(service) {
+    const item = document.createElement('a');
+    item.className = 'row';
+    item.setAttribute('role', 'listitem');
+    item.href = service.url || '#';
+    item.target = '_blank';
+    item.rel = 'noopener';
+    // Accessible label for the full-row link
+    const actionRu = service.action === 'download' ? 'Скачать' : 'Слушать';
+    item.setAttribute('aria-label', `${actionRu} — ${service.name}`);
+
+    const left = document.createElement('div');
+    left.className = 'service';
+    left.appendChild(makeLogo(service.id));
+    const name = document.createElement('div');
+    name.className = 'name';
+    name.textContent = service.name;
+    left.appendChild(name);
+
+    const right = document.createElement('div');
+    right.className = 'action';
+    const pill = document.createElement('span');
+    pill.className = 'btn';
+    pill.textContent = service.action === 'download' ? 'Скачать' : 'Слушать';
+    pill.setAttribute('aria-hidden', 'true'); // decorative only
+    right.appendChild(pill);
+
+    item.appendChild(left);
+    item.appendChild(right);
+    return item;
+  }
+
+  CONFIG.services.forEach(s => servicesEl.appendChild(row(s)));
+</script>
+	</body>
+</html>
+
