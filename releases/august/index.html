@@ -56,12 +56,16 @@
 			// 	destination: dest
 			// });
 
-			    // стандартное событие — под конверсию
-			if (window.fbq) fbq('track','ViewContent',{
-				content_type: 'stream',
-				content_name: svc,
-				destination: dest
-			});
+			// стандартное событие — под конверсию
+			if (window.fbq) {
+				const fbqEventParameters = {
+					content_type: 'stream',
+					content_name: svc,
+					destination: dest
+				}
+				fbq('track','ViewContent', fbqEventParameters);
+				console.log('fbq ViewContent ===>', fbqEventParameters);
+			}
 
 			if (window.ttq) ttq.track('ClickButton',{
 				content_type: 'stream',
