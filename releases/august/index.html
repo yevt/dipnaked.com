@@ -49,14 +49,24 @@
 			const a = e.target.closest('a.stream'); // твой класс-маркер
 			if (!a) return;
 			const svc = serviceFrom(a.href);
-			if (window.fbq) fbq('trackCustom','StreamClick',{
-			service: svc,
-			destination: String(a.href)
+			const dest = String(a.href);
+			
+			// if (window.fbq) fbq('trackCustom','StreamClick',{
+			// 	service: svc,
+			// 	destination: dest
+			// });
+
+			    // стандартное событие — под конверсию
+			if (window.fbq) fbq('track','ViewContent',{
+				content_type: 'stream',
+				content_name: svc,
+				destination: dest
 			});
+
 			if (window.ttq) ttq.track('ClickButton',{
-			content_type: 'stream',
-			content_name: svc,
-			destination_url: String(a.href)
+				content_type: 'stream',
+				content_name: svc,
+				destination_url: dest
 			});
 		}, {capture:true});
 		})();
