@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>dipnaked — listen</title>
+  <meta name="description" content="иди до конца. новый сингл dipnaked — слушай в своём сервисе." />
+  <meta property="og:title" content="dipnaked — listen" />
+  <meta property="og:description" content="иди до конца. новый сингл dipnaked — слушай в своём сервисе." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/artwork.jpg" />
+  <meta property="og:locale" content="ru_RU" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="theme-color" content="#0D1B2A" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#0D1B2A;           /* deep navy */
+      --ink:#F3F4F0;          /* light gray text */
+      --pink:#FF007F;         /* accent */
+      --blue:#1677FF;         /* accent */
+      --teal:#00BFA6;         /* accent */
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; background:var(--bg); color:var(--ink);
+      font-family:'Poppins',system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      letter-spacing:0.2px; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+    .wrap{min-height:100%; display:flex; align-items:center; justify-content:center; padding:24px}
+    .card{position:relative; width:100%; max-width:720px; border-radius:24px; padding:28px; overflow:hidden; background:rgba(255,255,255,0.02); box-shadow:0 10px 40px rgba(0,0,0,0.3);}
+    .spiral{position:absolute; inset:auto -20% -20% auto; width:520px; opacity:.12; filter:blur(0.3px);}
+    .logo{display:flex; align-items:flex-end; gap:8px; font-weight:600; font-size:28px; line-height:1; text-transform:lowercase;}
+    .logo .i{position:relative; padding-right:2px}
+    .logo .i::after{content:""; position:absolute; right:-1px; top:-6px; width:6px; height:6px; background:var(--pink); border-radius:999px;}
+    .title{margin:18px 0 8px; font-size:20px; font-weight:400; text-transform:lowercase; opacity:.9}
+    .subtitle{margin:0 0 20px; font-size:14px; font-weight:300; opacity:.7; text-transform:lowercase}
+    .cover{width:100%; max-width:320px; aspect-ratio:1/1; border-radius:20px; border:1px solid rgba(243,244,240,.16); display:block; margin:0 0 18px; object-fit:cover; box-shadow:0 10px 30px rgba(0,0,0,.25)}
+    @media(min-width:720px){.cover{float:left; margin:0 20px 18px 0}}
+    .teaser{position:absolute; right:-6%; top:-8%; width:420px; opacity:.07; mix-blend-mode:screen; filter:blur(0.6px); pointer-events:none;}
+    .buttons{display:grid; grid-template-columns:1fr; gap:10px}
+    @media(min-width:560px){.buttons{grid-template-columns:1fr 1fr}}
+    .btn{position:relative; display:flex; align-items:center; justify-content:center; gap:10px; padding:14px 16px; border-radius:16px; border:1px solid rgba(243,244,240,.16); text-decoration:none; color:var(--ink); text-transform:lowercase; font-weight:500; transition:transform .2s ease, border-color .2s ease, background .2s ease}
+    .btn:hover{transform:translateY(-1px); border-color:rgba(243,244,240,.36); background:rgba(255,255,255,0.03)}
+    .btn .dot{width:6px; height:6px; border-radius:999px; background:var(--pink)}
+    .btn.spotify .dot{background:#1DB954}
+    .btn.apple .dot{background:#fff}
+    .btn.youtube .dot{background:#FF0000}
+    .btn.deezer .dot{background:#ef5466}
+    .btn.soundcloud .dot{background:#ff7700}
+    .muted{margin-top:18px; font-size:12px; opacity:.5; text-transform:lowercase}
+    .footer{display:flex; align-items:center; justify-content:space-between; margin-top:18px; opacity:.5; font-size:12px; text-transform:lowercase}
+    .accent{color:var(--pink)}
+    .badges{display:flex; gap:8px; flex-wrap:wrap}
+    .tag{padding:6px 10px; border:1px solid rgba(243,244,240,.16); border-radius:999px; font-size:11px; opacity:.8}
+  .btn.vk .dot{background:#2787F5}
+    .btn.yandex .dot{background:#FFCC00}
+  .player{display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.02); border:1px solid rgba(243,244,240,.16); border-radius:16px; padding:10px 12px; margin:0 0 18px}
+    .pp{width:44px; height:44px; border-radius:999px; border:1px solid rgba(243,244,240,.24); background:transparent; color:var(--ink); font-size:18px; font-weight:600; display:flex; align-items:center; justify-content:center; cursor:pointer}
+    .pp:hover{background:rgba(255,255,255,0.03)}
+    .bar{position:relative; height:6px; flex:1; background:rgba(243,244,240,.12); border-radius:999px; overflow:hidden; cursor:pointer}
+    .fill{position:absolute; left:0; top:0; bottom:0; width:0%; background:linear-gradient(90deg,var(--pink),var(--teal));}
+    .time{min-width:78px; text-align:right; font-size:12px; opacity:.7}
+  </style>
+  <!-- Meta Pixel (placeholder) -->
+  <!-- <script>!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+  n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;
+  n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+  t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+  fbq('init','YOUR_META_PIXEL_ID');fbq('track','ViewContent');  // light audio player
+    (function(){
+      const a=document.getElementById('preview');
+      const pp=document.getElementById('pp');
+      const bar=document.getElementById('bar');
+      const fill=document.getElementById('fill');
+      const cur=document.getElementById('cur');
+      const dur=document.getElementById('dur');
+      if(!a||!pp||!bar||!fill) return;
+      const fmt=t=>{ if(!isFinite(t)||t<=0) return '0:00'; const m=Math.floor(t/60), s=Math.floor(t%60); return m+':' + (s<10?'0'+s:s); };
+      a.addEventListener('loadedmetadata',()=>{ dur.textContent=fmt(a.duration); });
+      a.addEventListener('timeupdate',()=>{ fill.style.width=((a.currentTime/a.duration)*100||0)+'%'; cur.textContent=fmt(a.currentTime); });
+      a.addEventListener('play',()=>{ pp.textContent='❚❚'; });
+      a.addEventListener('pause',()=>{ pp.textContent='▶'; });
+      a.addEventListener('ended',()=>{ pp.textContent='▶'; });
+      pp.addEventListener('click',()=>{ a.paused ? a.play() : a.pause(); });
+      bar.addEventListener('click',e=>{ const r=bar.getBoundingClientRect(); const x=(e.clientX-r.left)/r.width; a.currentTime=(a.duration||0)*Math.max(0,Math.min(1,x)); });
+    })();
+  </script> -->
+  
+  <!-- TikTok Pixel (placeholder) -->
+  <!-- <script>!function (w, d, t) {w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=['page','track'];ttq.setAndDefer=function(t){ttq[t]=function(){ttq.push([t].concat([].slice.call(arguments)))}};ttq.setAndDefer('page');var a=d.createElement('script');a.async=1;a.src='https://analytics.tiktok.com/i18n/pixel/events.js';var s=d.getElementsByTagName('script')[0];s.parentNode.insertBefore(a,s)}(window, document, 'ttq');ttq.page();ttq.track('ViewContent');</script> -->
+  
+  <!-- Google Analytics (placeholder) -->
+  <!-- <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXX"></script>
+  <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config','G-XXXXXXX');</script> -->
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <!-- spiral background -->
+      <svg class="spiral" viewBox="0 0 600 600" aria-hidden="true">
+        <defs>
+          <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#FF007F" stop-opacity="0.5"/>
+            <stop offset="1" stop-color="#00BFA6" stop-opacity="0.5"/>
+          </linearGradient>
+        </defs>
+        <path fill="none" stroke="url(#g)" stroke-width="2" d="
+          M300,300 m-10,0 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0
+          m-20,0 a30,30 0 1,0 60,0 a30,30 0 1,0 -60,0
+          m-30,0 a60,60 0 1,0 120,0 a60,60 0 1,0 -120,0
+          m-40,0 a100,100 0 1,0 200,0 a100,100 0 1,0 -200,0
+          m-50,0 a150,150 0 1,0 300,0 a150,150 0 1,0 -300,0
+          m-60,0 a210,210 0 1,0 420,0 a210,210 0 1,0 -420,0"></path>
+      </svg>
+      <!-- faint angel still (optional) -->
+      <img class="teaser" src="/angel-teaser.jpg" alt="" aria-hidden="true" />
+
+      <!-- header -->
+      <div class="logo" aria-label="dipnaked">
+        <span>dipnak</span><span class="i">e</span><span>d</span>
+      </div>
+      <h1 class="title">иди до конца.</h1>
+      <p class="subtitle">новый сингл — слушай там, где тебе удобно</p>
+
+      <!-- official cover artwork -->
+      <img class="cover" src="/artwork.jpg" alt="обложка — Август / dipnaked" />
+
+      <!-- minimalist audio preview (15–20s) -->
+      <div class="player" id="player" role="region" aria-label="аудиопревью — Август">
+        <button class="pp" id="pp" aria-label="play">▶</button>
+        <div class="bar" id="bar" aria-label="progress"><div class="fill" id="fill"></div></div>
+        <div class="time"><span id="cur">0:00</span> / <span id="dur">0:00</span></div>
+      </div>
+      <audio id="preview" src="/media/avgust-snippet.mp3" preload="none"></audio>
+
+      <!-- buttons -->
+      <div class="buttons">
+        <a class="btn spotify out" href="#" data-link="https://open.spotify.com/album/6bA7x9AodEANu1Yq6rInCu" rel="noopener" target="_blank">
+          <span class="dot"></span> spotify
+        </a>
+        $1
+        <a class=\"btn yandex out\" href=\"#\" data-link=\"#\" rel=\"noopener\" target=\"_blank\">
+          <span class=\"dot\"></span> yandex music
+        </a>
+        <a class=\"btn vk out\" href=\"#\" data-link=\"https://vk.com/audio474499146_456916422_4210d6e84e7087ab03\" rel=\"noopener\" target=\"_blank\">
+          <span class=\"dot\"></span> vk music
+        </a>
+        <a class="btn youtube out" href="#" data-link="#" rel="noopener" target="_blank">
+          <span class="dot"></span> youtube music
+        </a>
+        <a class="btn deezer out" href="#" data-link="#" rel="noopener" target="_blank">
+          <span class="dot"></span> deezer
+        </a>
+        <a class="btn soundcloud out" href="#" data-link="#" rel="noopener" target="_blank">
+          <span class="dot"></span> soundcloud
+        </a>
+        <!-- universal smart-link button (1rpm) -->
+        <a class="btn" href="#" data-link="https://onerpm.link/224152119272" target="_blank" rel="noopener">
+          <span class="dot"></span> listen everywhere
+        </a>
+      </div>
+
+      <div class="footer">
+        <div class="badges">
+          <span class="tag">hip‑hop</span>
+          <span class="tag">r&b</span>
+          <span class="tag">alt pop</span>
+        </div>
+        <span>© <span id="y"></span> dipnaked</span>
+      </div>
+
+      <p class="muted">примечание: utm-метки с этой страницы автоматически добавятся к ссылкам сервисов.</p>
+    </div>
+  </div>
+
+  <script>
+    // year
+    document.getElementById('y').textContent = new Date().getFullYear();
+
+    // propagate UTM params to outbound links so your ad tags follow the user
+    const q = window.location.search;
+    document.querySelectorAll('a.out').forEach(a=>{
+      const base = a.getAttribute('data-link');
+      if(!base || base === '#') { a.parentElement.removeChild(a); return; }
+      try{
+        const url = new URL(base);
+        if(q) {
+          const from = new URLSearchParams(q);
+          from.forEach((v,k)=>{ if(!url.searchParams.has(k)) url.searchParams.set(k,v); });
+        }
+        a.href = url.toString();
+      }catch(e){ a.href = base + q; }
+    });
+        }
+        a.href = url.toString();
+      }catch(e){ a.href = base + q; }
+    });
+
+    // also set the universal smart-link
+    const uni = document.querySelector('a[data-link="https://onerpm.link/224152119272"]');
+    if(uni){
+      const base = uni.getAttribute('data-link');
+      if(base && base !== '#'){
+        try{
+          const url = new URL(base);
+          if(q){
+            const from = new URLSearchParams(q);
+            from.forEach((v,k)=>{ if(!url.searchParams.has(k)) url.searchParams.set(k,v); });
+          }
+          uni.href = url.toString();
+        }catch(e){ uni.href = base + q; }
+      }
+    }
+      
+    // hide buttons with missing links and reorder by device
+    (function(){
+      const buttonsWrap = document.querySelector('.buttons');
+      if(!buttonsWrap) return;
+      const btns = Array.from(buttonsWrap.querySelectorAll('.btn'));// includes store + universal
+      btns.forEach(b=>{
+        const link = b.getAttribute('data-link');
+        if(b.classList.contains('out')){
+          if(link === '#' || !link){ b.style.display = 'none'; }
+        }
+      });
+      // iOS: put Apple first; Android: Spotify first
+      const ua = navigator.userAgent || '';
+      const isIOS = /iPad|iPhone|iPod/.test(ua);
+      const isAndroid = /Android/.test(ua);
+      function moveFirst(sel){
+        const el = buttonsWrap.querySelector(sel);
+        if(el && el.style.display !== 'none'){
+          buttonsWrap.prepend(el);
+        }
+      }
+      if(isIOS){ moveFirst('.btn.apple'); }
+      else if(isAndroid){ moveFirst('.btn.spotify'); }
+    })();
+  </script>
+</body>
+</html>
