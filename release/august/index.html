@@ -188,26 +188,84 @@
   // Configuration: replace URLs with your actual links.
   const CONFIG = {
     title: 'Август',
-    artwork: './cover.jpg', // Put cover.jpg next to this file
-    artworkHref: '#',        // Optional: click on artwork goes to your primary link
+    artwork: './cover.jpg',
+    artworkHref: '#',
     year: new Date().getFullYear(),
     services: [
-      // Must-have
-      { id: 'spotify',      name: 'Spotify',        url: 'https://open.spotify.com/album/6bA7x9AodEANu1Yq6rInCu',       action: 'play' },
-      { id: 'applemusic',   name: 'Apple Music',    url: 'https://geo.music.apple.com/us/album/%D0%B0%D0%B2%D0%B3%D1%83%D1%81%D1%82-single/1834973006?app=itunes&ls=1',        action: 'play' },
-      { id: 'yandexmusic',  name: 'Яндекс Музыка',  url: 'https://music.yandex.ru/track/142213433?utm_source=web&utm_medium=copy_link',        action: 'play' },
-      { id: 'vk',           name: 'VK Музыка',      url: 'https://vk.com/audio474499146_456916422_9604c2218ff4019301',            action: 'play' },
-      { id: 'ytmusic',      name: 'YouTube Music',  url: 'https://music.youtube.com/playlist?list=OLAK5uy_mKZpd1L5kNz-sSM-nY5GZ0-tXW9gyvISg&si=MkYTlkpG68GG4oly',      action: 'play' },
-
-      // Nice-to-have (geo)
-      { id: 'deezer',       name: 'Deezer',         url: 'https://www.deezer.com/album/813570131',         action: 'play' },
-      { id: 'tidal',        name: 'Tidal',          url: 'http://www.tidal.com/album/455759856',              action: 'play' },
-      { id: 'amazonmusic',  name: 'Amazon Music',   url: 'https://music.amazon.com/albums/B0FNDTVHXT?ref=dm_ff_amazonmusic_3p',       action: 'play' },
-
-      // Optional (scenario)
-      { id: 'soundcloud',   name: 'SoundCloud',     url: 'https://soundcloud.com/dipnaked-music/avgust?utm_source=clipboard&utm_medium=text&utm_campaign=social_sharing',         action: 'play' }
+      { id: 'spotify', name: 'Spotify', url: 'https://open.spotify.com/album/6bA7x9AodEANu1Yq6rInCu', action: 'play' },
+      { id: 'applemusic', name: 'Apple Music', url: 'https://geo.music.apple.com/us/album/%D0%B0%D0%B2%D0%B3%D1%83%D1%81%D1%82-single/1834973006?app=itunes&ls=1', action: 'play' },
+      { id: 'yandexmusic', name: 'Яндекс Музыка', url: 'https://music.yandex.ru/track/142213433?utm_source=web&utm_medium=copy_link', action: 'play' },
+      { id: 'vk', name: 'VK Музыка', url: 'https://vk.com/audio474499146_456916422_9604c2218ff4019301', action: 'play' },
+      { id: 'ytmusic', name: 'YouTube Music', url: 'https://music.youtube.com/playlist?list=OLAK5uy_mKZpd1L5kNz-sSM-nY5GZ0-tXW9gyvISg&si=MkYTlkpG68GG4oly', action: 'play' },
+      { id: 'deezer', name: 'Deezer', url: 'https://www.deezer.com/album/813570131', action: 'play' },
+      { id: 'tidal', name: 'Tidal', url: 'http://www.tidal.com/album/455759856', action: 'play' },
+      { id: 'amazonmusic', name: 'Amazon Music', url: 'https://music.amazon.com/albums/B0FNDTVHXT?ref=dm_ff_amazonmusic_3p', action: 'play' },
+      { id: 'soundcloud', name: 'SoundCloud', url: 'https://soundcloud.com/dipnaked-music/avgust?utm_source=clipboard&utm_medium=text&utm_campaign=social_sharing', action: 'play' }
     ]
   };
+
+  // Tiny i18n for action labels
+  const I18N = {
+    ru: { play: 'Слушать', download: 'Скачать' },
+    en: { play: 'Play', download: 'Download' }
+  };
+
+  // Detect language: URL (?lang=ru|en) -> localStorage -> browser prefs
+  function detectLang() {
+  const params = new URLSearchParams(location.search);
+  const supported = ['ru', 'en'];
+  const fromParam = (params.get('lang') || '').toLowerCase();
+  const debug = (params.get('debug') || '').toLowerCase().includes('i18n') || params.get('debug') === '1';
+
+  // 1) URL override
+  if (supported.includes(fromParam)) {
+    if (debug) console.log('[i18n] using URL param', { lang: fromParam });
+    return fromParam;
+  }
+  // 'auto' just skips to auto-detect; any other value ignored
+
+  // 2) Browser preferences (modern)
+  const raw = (navigator.languages && Array.from(navigator.languages)) || [];
+  const primary = (navigator.language || navigator.userLanguage || '').toLowerCase();
+  const list = raw.map(l => (l || '').toLowerCase()).filter(Boolean);
+  if (primary && !list.includes(primary)) list.unshift(primary);
+
+  // Normalize and match by prefix
+  const langFromPrefs =
+    list.find(l => l.startsWith('ru')) ? 'ru'
+    : list.find(l => l.startsWith('en')) ? 'en'
+    : null;
+
+  // 3) Fallback: html[lang], then 'en'
+  const htmlLang = (document.documentElement.getAttribute('lang') || '').toLowerCase();
+  const detected = langFromPrefs || (supported.includes(htmlLang) ? htmlLang : 'en');
+
+  if (debug) console.log('[i18n] auto-detected', { rawPrefs: raw, primary: navigator.language, list, htmlLang, detected });
+  return detected;
+}
+
+const lang = detectLang();
+const t = (window.I18N && I18N[lang]) || (window.I18N && I18N.en) || { play: 'Play', download: 'Download' };
+document.documentElement.lang = lang;
+
+// Optional: tiny on-page debug badge
+(function maybeShowDebug() {
+  const params = new URLSearchParams(location.search);
+  const show = (params.get('debug') || '').toLowerCase().includes('i18n') || params.get('debug') === '1';
+  if (!show) return;
+  const prefsRaw = (navigator.languages && Array.from(navigator.languages)) || [];
+  const primary = navigator.language;
+  const div = document.createElement('div');
+  div.style.cssText = 'position:fixed;left:10px;bottom:10px;z-index:9999;background:#111;color:#fff;border:1px solid rgba(255,255,255,.2);padding:8px 10px;border-radius:8px;font:12px/1.3 system-ui;';
+  div.innerHTML = `
+    <strong>i18n debug</strong><br>
+    lang: <code>${lang}</code><br>
+    primary: <code>${primary || '-'}</code><br>
+    prefs: <code>${prefsRaw.join(', ') || '-'}</code><br>
+    url: <code>${location.search || '(none)'}</code>
+  `;
+  document.body.appendChild(div);
+})();
 
   const $ = (sel) => document.querySelector(sel);
   const servicesEl = $('#services');
@@ -225,12 +283,8 @@
   function makeLogo(id) {
     const span = document.createElement('span');
     span.className = 'logo';
-
     const img = document.createElement('img');
-    img.decoding = 'async';
-    img.loading = 'lazy';
-    img.alt = '';
-
+    img.decoding = 'async'; img.loading = 'lazy'; img.alt = '';
     const sources = [
       `/assets/icons/${id}.svg`,
       `/assets/icons/${id}.png`,
@@ -238,15 +292,9 @@
       `/assets/icons/default.svg`,
       `/assets/icons/default.png`
     ];
-
     let i = 0;
-    img.onerror = () => {
-      i += 1;
-      if (i < sources.length) img.src = sources[i];
-      else img.onerror = null;
-    };
+    img.onerror = () => { i += 1; if (i < sources.length) img.src = sources[i]; else img.onerror = null; };
     img.src = sources[i];
-
     span.appendChild(img);
     return span;
   }
@@ -258,9 +306,9 @@
     item.href = service.url || '#';
     item.target = '_blank';
     item.rel = 'noopener';
-    // Accessible label for the full-row link
-    const actionRu = service.action === 'download' ? 'Скачать' : 'Слушать';
-    item.setAttribute('aria-label', `${actionRu} — ${service.name}`);
+
+    const actionText = t[service.action] || t.play; // localized label
+    item.setAttribute('aria-label', `${actionText} — ${service.name}`);
 
     const left = document.createElement('div');
     left.className = 'service';
@@ -274,8 +322,8 @@
     right.className = 'action';
     const pill = document.createElement('span');
     pill.className = 'btn';
-    pill.textContent = service.action === 'download' ? 'Скачать' : 'Слушать';
-    pill.setAttribute('aria-hidden', 'true'); // decorative only
+    pill.textContent = actionText;     // localized pill
+    pill.setAttribute('aria-hidden', 'true');
     right.appendChild(pill);
 
     item.appendChild(left);
