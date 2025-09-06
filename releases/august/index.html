@@ -27,6 +27,40 @@
 		<noscript><img height="1" width="1" style="display:none"
 		src="https://www.facebook.com/tr?id=4126388250946452&ev=PageView&noscript=1"
 		/></noscript>
+		
+		<script>
+		(function(){
+		function serviceFrom(href){
+			try{
+			const h = new URL(href, location.href).hostname.toLowerCase();
+			if (/spotify/.test(h)) return 'spotify';
+			if (/music\.apple|itunes\.apple/.test(h)) return 'apple_music';
+			if (/music\.youtube\.com|youtu\.be/.test(h)) return 'youtube_music';
+			if (/music\.yandex\./.test(h)) return 'yandex_music';
+			if (/deezer\.com/.test(h)) return 'deezer';
+			if (/tidal\.com/.test(h)) return 'tidal';
+			if (/music\.amazon\./.test(h)) return 'amazon_music';
+			if (/soundcloud\.com/.test(h)) return 'soundcloud';
+			if (/vk\.com|music\.vk\.com/.test(h)) return 'vk_music';
+			return 'other';
+			} catch(e){ return 'other'; }
+		}
+		document.addEventListener('click', function(e){
+			const a = e.target.closest('a.stream'); // твой класс-маркер
+			if (!a) return;
+			const svc = serviceFrom(a.href);
+			if (window.fbq) fbq('trackCustom','StreamClick',{
+			service: svc,
+			destination: String(a.href)
+			});
+			if (window.ttq) ttq.track('ClickButton',{
+			content_type: 'stream',
+			content_name: svc,
+			destination_url: String(a.href)
+			});
+		}, {capture:true});
+		})();
+		</script>
 		<!-- End Meta Pixel Code -->
 
 
