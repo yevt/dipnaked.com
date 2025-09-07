@@ -221,7 +221,7 @@
 						border-radius: 12px;
 						padding: 12px;
 						text-decoration: none; /* anchor reset */
-						color: inherit;
+						color: #eaeaea; /* Force light text on dark row background */
 						transition: background .15s ease, border-color .15s ease, transform .02s ease;
 					}
 					.row:hover { background: #121212; border-color: rgba(255,255,255,0.14); }
@@ -250,7 +250,7 @@
 						display: inline-block;
 						border: 1px solid var(--border);
 						background: var(--btn-bg);
-						color: var(--text);
+						color: #eaeaea; /* Force light text on button */
 						padding: 8px 12px;
 						font-size: 13px;
 						border-radius: 10px;
@@ -276,6 +276,35 @@
 					--btn-bg: #f1f1f1;
 					--btn-hover: #e9e9e9;
 				}
+
+				/* In light mode, keep service rows and buttons in dark mode */
+				.row {
+					/* Override light mode for rows - keep them dark with light text */
+					background: #101010;
+					border-color: rgba(255,255,255,0.08);
+				}
+				.row:hover { background: #121212; border-color: rgba(255,255,255,0.14); }
+				
+				.btn {
+					/* Override light mode for buttons - keep them dark with light text */
+					background: #1d1d1d;
+					color: #eaeaea;
+					border-color: rgba(255,255,255,0.08);
+				}
+				.row:hover .btn { background: #262626; }
+				
+				/* Keep preview area dark in light mode too */
+				.preview {
+					background: #101010;
+					border-color: rgba(255,255,255,0.08);
+				}
+				.preview .pp {
+					background: #1d1d1d;
+					color: #eaeaea;
+					border-color: rgba(255,255,255,0.08);
+				}
+				.preview .pp:hover { background: #262626; }
+				.preview .meta { color: #b9b9b9; }
 			}
 		</style>
 	</head>
