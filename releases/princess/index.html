@@ -81,13 +81,13 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 		<meta http-equiv="X-UA-Compatible" content="IE=edge" />
-		<title>Август — слушать</title>
-		<meta name="description" content="Выберите любимый стриминговый сервис, чтобы послушать трек ‘Август’." />
+		<title>Не моя принцесса — слушать</title>
+		<meta name="description" content="Выберите любимый стриминговый сервис, чтобы послушать трек ‘Не моя принцесса’." />
 		<!-- Social preview -->
 		<meta property="og:type" content="website" />
-		<meta property="og:title" content="Август — слушать" />
-		<meta property="og:description" content="Выберите любимый стриминговый сервис, чтобы послушать трек ‘Август’." />
-		<meta property="og:image" content="./cover.jpg" />
+		<meta property="og:title" content="Не моя принцесса — слушать" />
+		<meta property="og:description" content="Выберите любимый стриминговый сервис, чтобы послушать трек ‘Не моя принцесса’." />
+		<meta property="og:image" content="./cover.png" />
 		<meta property="og:url" content="" />
 		<meta name="twitter:card" content="summary_large_image" />
 		<meta name="theme-color" content="#0b0b0b" />
@@ -277,11 +277,11 @@
 	<body>
 		<main class="wrap">
 			<article class="card" role="region" aria-label="Альбом и ссылки на сервисы">
-				<a id="artworkLink" class="artwork" href="./cover.jpg" target="_blank" rel="noopener">
-					<img id="artworkImg" src="./cover.jpg" alt="Обложка — Август" loading="eager" />
+				<a id="artworkLink" class="artwork" href="./cover.png" target="_blank" rel="noopener">
+					<img id="artworkImg" src="./cover.png" alt="Обложка — Не моя принцесса" loading="eager" />
 				</a>
 				<header class="titlebar">
-					<h1 id="trackTitle">Август</h1>
+					<h1 id="trackTitle">Не моя принцесса</h1>
 					<p>Choose your preferred music service</p>
 				</header>
 				<div id="preview" class="preview" aria-label="Audio preview">
@@ -302,17 +302,17 @@
 		<script>
   // Configuration: replace URLs with your actual links.
   const CONFIG = {
-    title: 'Август',
-    artwork: './cover.jpg',
+    title: 'Не моя принцесса',
+    artwork: './cover.png',
     artworkHref: '#',
     year: new Date().getFullYear(),
 	preview: { url: './preview.mp3', start: 0, duration: 30 },
     services: [
-      { id: 'spotify', name: 'Spotify', url: 'https://open.spotify.com/album/6bA7x9AodEANu1Yq6rInCu', action: 'play' },
-      { id: 'applemusic', name: 'Apple Music', url: 'https://geo.music.apple.com/us/album/%D0%B0%D0%B2%D0%B3%D1%83%D1%81%D1%82-single/1834973006?app=itunes&ls=1', action: 'play' },
-      { id: 'yandexmusic', name: 'Яндекс Музыка', url: 'https://music.yandex.ru/track/142213433?utm_source=web&utm_medium=copy_link', action: 'play' },
-      { id: 'vk', name: 'VK Музыка', url: 'https://vk.com/audio474499146_456916422_9604c2218ff4019301', action: 'play' },
-      { id: 'ytmusic', name: 'YouTube Music', url: 'https://music.youtube.com/playlist?list=OLAK5uy_mKZpd1L5kNz-sSM-nY5GZ0-tXW9gyvISg&si=MkYTlkpG68GG4oly', action: 'play' },
+      { id: 'spotify', name: 'Spotify', url: 'https://open.spotify.com/track/3IkZ2PdXEeA6HjN5qWm1Tt', action: 'play' },
+      { id: 'applemusic', name: 'Apple Music', url: 'https://music.apple.com/md/album/%D0%BD%D0%B5-%D0%BC%D0%BE%D1%8F-%D0%BF%D1%80%D0%B8%D0%BD%D1%86%D0%B5%D1%81%D1%81%D0%B0-single/1841942207', action: 'play' },
+      { id: 'yandexmusic', name: 'Яндекс Музыка', url: 'https://music.yandex.ru/album/38369981?utm_source=web&utm_medium=copy_link', action: 'play' },
+      { id: 'vk', name: 'VK Музыка', url: 'https://vk.com/audio-2001247100_143247100', action: 'play' },
+      { id: 'ytmusic', name: 'YouTube Music', url: 'https://music.youtube.com/watch?v=rnICi-0Hpnw&si=J76uAAnDBPOH7RR8', action: 'play' },
       { id: 'deezer', name: 'Deezer', url: 'https://www.deezer.com/album/813570131', action: 'play' },
       { id: 'tidal', name: 'Tidal', url: 'http://www.tidal.com/album/455759856', action: 'play' },
       { id: 'amazonmusic', name: 'Amazon Music', url: 'https://music.amazon.com/albums/B0FNDTVHXT?ref=dm_ff_amazonmusic_3p', action: 'play' },
@@ -391,7 +391,7 @@ document.documentElement.lang = lang;
   const yearEl = $('#releaseYear');
 
   titleEl.textContent = CONFIG.title || '—';
-  artImg.src = CONFIG.artwork || './cover.jpg';
+  artImg.src = CONFIG.artwork || './cover.png';
   artImg.alt = `Обложка — ${CONFIG.title || ''}`.trim();
   if (CONFIG.artworkHref && CONFIG.artworkHref !== '#') { artLink.href = CONFIG.artworkHref; }
   yearEl.textContent = CONFIG.year ? `© ${CONFIG.year}` : '';
