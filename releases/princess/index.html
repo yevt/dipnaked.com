@@ -87,7 +87,7 @@
 		<meta property="og:type" content="website" />
 		<meta property="og:title" content="Не моя принцесса — слушать" />
 		<meta property="og:description" content="Выберите любимый стриминговый сервис, чтобы послушать трек ‘Не моя принцесса’." />
-		<meta property="og:image" content="./cover.png" />
+		<meta property="og:image" content="./cover.jpg" />
 		<meta property="og:url" content="" />
 		<meta name="twitter:card" content="summary_large_image" />
 		<meta name="theme-color" content="#0b0b0b" />
@@ -277,8 +277,8 @@
 	<body>
 		<main class="wrap">
 			<article class="card" role="region" aria-label="Альбом и ссылки на сервисы">
-				<a id="artworkLink" class="artwork" href="./cover.png" target="_blank" rel="noopener">
-					<img id="artworkImg" src="./cover.png" alt="Обложка — Не моя принцесса" loading="eager" />
+				<a id="artworkLink" class="artwork" href="./cover.jpg" target="_blank" rel="noopener">
+					<img id="artworkImg" src="./cover.jpg" alt="Обложка — Не моя принцесса" loading="eager" />
 				</a>
 				<header class="titlebar">
 					<h1 id="trackTitle">Не моя принцесса</h1>
@@ -303,7 +303,7 @@
   // Configuration: replace URLs with your actual links.
   const CONFIG = {
     title: 'Не моя принцесса',
-    artwork: './cover.png',
+    artwork: './cover.jpg',
     artworkHref: '#',
     year: new Date().getFullYear(),
 	preview: { url: './preview.mp3', start: 0, duration: 30 },
@@ -391,7 +391,7 @@ document.documentElement.lang = lang;
   const yearEl = $('#releaseYear');
 
   titleEl.textContent = CONFIG.title || '—';
-  artImg.src = CONFIG.artwork || './cover.png';
+  artImg.src = CONFIG.artwork || './cover.jpg';
   artImg.alt = `Обложка — ${CONFIG.title || ''}`.trim();
   if (CONFIG.artworkHref && CONFIG.artworkHref !== '#') { artLink.href = CONFIG.artworkHref; }
   yearEl.textContent = CONFIG.year ? `© ${CONFIG.year}` : '';
