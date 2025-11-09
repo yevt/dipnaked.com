@@ -35,6 +35,16 @@
         section:first-child {
             text-align: center;
         }
+        section.streaming-section {
+            margin-left: -20px;
+            margin-right: -20px;
+            padding-left: 0;
+            padding-right: 0;
+        }
+        section.streaming-section h2 {
+            padding-left: 20px;
+            padding-right: 20px;
+        }
         a {
             text-decoration: none;
             color: #B4B5B2;
@@ -43,7 +53,7 @@
             display: inline-block;
             transition: all 0.3s ease;
         }
-        a::after {
+        a:not(.streaming-logos a)::after {
             content: '';
             position: absolute;
             width: 0;
@@ -53,11 +63,10 @@
             background-color: rgba(0, 191, 166, 0.95);
             transition: all 0.3s ease;
         }
-        a:hover::after {
+        a:not(.streaming-logos a):hover::after {
             width: calc(100% - 0.1em);
         }
         img {
-            margin-bottom: 20px;
             width: 150px;
         }
         h2 {
@@ -67,6 +76,72 @@
             font-weight: extra-bold;
             text-align: right;
             /* text-transform: uppercase; */
+        }
+        .streaming-logos {
+            display: flex;
+            gap: 12px;
+            flex-wrap: nowrap;
+            align-items: center;
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+            padding: 0 20px 8px 20px;
+            box-sizing: border-box;
+            width: 100%;
+            max-width: 288px;
+        }
+        .streaming-logos::-webkit-scrollbar {
+            height: 8px;
+        }
+        .streaming-logos::-webkit-scrollbar-track {
+            background: rgba(67, 67, 66, 0.2);
+            border-radius: 4px;
+        }
+        .streaming-logos::-webkit-scrollbar-thumb {
+            background: #434342;
+            border-radius: 4px;
+        }
+        .streaming-logos::-webkit-scrollbar-thumb:hover {
+            background: #B4B5B2;
+        }
+        .streaming-logos a {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding-bottom: 3px;
+            height: 28px;
+            flex-shrink: 0;
+        }
+        .streaming-logos a:first-child {
+            margin-left: 0;
+        }
+        .streaming-logos a:last-child {
+            margin-right: 0;
+        }
+        .streaming-logos img {
+            height: 28px;
+            width: auto;
+            display: block;
+        }
+        .streaming-logos span {
+            font-size: 14px;
+            display: block;
+            height: 28px;
+            line-height: 28px;
+            position: relative;
+        }
+        .streaming-logos span::after {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 2px;
+            bottom: 0;
+            left: 0.05em;
+            background-color: rgba(0, 191, 166, 0.95);
+            transition: all 0.3s ease;
+        }
+        .streaming-logos a:hover span::after {
+            width: calc(100% - 0.1em);
         }
     </style>
     <script>
@@ -79,20 +154,53 @@
         
         window.addEventListener('DOMContentLoaded', scaleBody);
         window.addEventListener('resize', scaleBody);
+
+
     </script>
 </head>
 <body>
     <section>
         <a href="https://www.dipnaked.com/"><img src="./logo.png" alt="Dipnaked Logo"></a>
     </section>
-    <section>
+    <section class="streaming-section">
         <h2>streamings</h2>
-        <a href="https://open.spotify.com/artist/5x1f95Qpvhruom1A7cyjxF">spotify</a>
-        <br/>
-        <a href="https://music.apple.com/md/artist/dipnaked/1733917933">apple music</a>
-        <br/>
-        <a href="https://music.yandex.com/artist/22069421">yandex music</a>
-
+        <div class="streaming-logos">
+            <a href="https://open.spotify.com/artist/5r7RJF0PGp0dOGLlOwTPq9" target="_blank" rel="noopener">
+                <img src="/assets/icons/spotify.svg" alt="Spotify">
+                <span>spotify</span>
+            </a>
+            <a href="https://music.apple.com/us/artist/dipnaked/1517751928" target="_blank" rel="noopener">
+                <img src="/assets/icons/applemusic.svg" alt="Apple Music">
+                <span>apple music</span>
+            </a>
+            <a href="https://music.yandex.ru/artist/5571912" target="_blank" rel="noopener">
+                <img src="/assets/icons/yandexmusic.png" alt="Yandex Music">
+                <span>yandex music</span>
+            </a>
+            <a href="https://vk.com/dipnaked" target="_blank" rel="noopener">
+                <img src="/assets/icons/vk.svg" alt="VK Music">
+                <span>vk music</span>
+            </a>
+            <a href="https://music.youtube.com/channel/UCr-lj2v7w_s5l3JFfF8pxJw" target="_blank" rel="noopener">
+                <img src="/assets/icons/ytmusic.png" alt="YouTube Music">
+                <span>youtube music</span>
+            </a>
+            <a href="https://www.deezer.com/artist/71710872" target="_blank" rel="noopener">
+                <img src="/assets/icons/deezer.png" alt="Deezer">
+                <span>deezer</span>
+            </a>
+            <a href="https://tidal.com/browse/artist/21649866" target="_blank" rel="noopener">
+                <img src="/assets/icons/tidal.png" alt="Tidal">
+                <span>tidal</span>
+            </a>
+            <a href="https://music.amazon.com/artists/B08BFZ7B5S" target="_blank" rel="noopener">
+                <img src="/assets/icons/amazonmusic.png" alt="Amazon Music">
+            </a>
+            <a href="https://soundcloud.com/dipnaked-music" target="_blank" rel="noopener">
+                <img src="/assets/icons/soundcloud.png" alt="SoundCloud">
+                <span>soundcloud</span>
+            </a>
+        </div>
     </section>
     <section>
         <h2>socials</h2>
