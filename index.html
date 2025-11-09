@@ -91,18 +91,11 @@
             max-width: 288px;
         }
         .streaming-logos::-webkit-scrollbar {
-            height: 8px;
+            display: none;
         }
-        .streaming-logos::-webkit-scrollbar-track {
-            background: rgba(67, 67, 66, 0.2);
-            border-radius: 4px;
-        }
-        .streaming-logos::-webkit-scrollbar-thumb {
-            background: #434342;
-            border-radius: 4px;
-        }
-        .streaming-logos::-webkit-scrollbar-thumb:hover {
-            background: #B4B5B2;
+        .streaming-logos {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
         }
         .streaming-logos a {
             display: inline-flex;
@@ -122,6 +115,45 @@
             height: 28px;
             width: auto;
             display: block;
+        }
+        
+        /* Socials horizontal scroll */
+        section.socials-section .socials-links {
+            margin-left: -20px;
+            margin-right: -20px;
+            width: calc(100% + 40px);
+        }
+        .socials-links {
+            display: flex;
+            gap: 12px;
+            flex-wrap: nowrap;
+            align-items: center;
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+            padding: 0 0 8px 20px;
+        }
+        .socials-links::after {
+            content: '';
+            padding-right: 20px;
+        }
+        .socials-links::-webkit-scrollbar {
+            height: 8px;
+        }
+        .socials-links::-webkit-scrollbar-track {
+            background: rgba(67, 67, 66, 0.2);
+            border-radius: 4px;
+        }
+        .socials-links::-webkit-scrollbar-thumb {
+            background: #434342;
+            border-radius: 4px;
+        }
+        .socials-links::-webkit-scrollbar-thumb:hover {
+            background: #B4B5B2;
+        }
+        .socials-links a {
+            flex-shrink: 0;
+            white-space: nowrap;
         }
         .streaming-logos span {
             font-size: 14px;
@@ -155,7 +187,30 @@
         window.addEventListener('DOMContentLoaded', scaleBody);
         window.addEventListener('resize', scaleBody);
 
-
+        // Convert vertical scroll to horizontal scroll for streaming logos
+        document.addEventListener('DOMContentLoaded', function() {
+            const streamingLogos = document.querySelector('.streaming-logos');
+            if (streamingLogos) {
+                streamingLogos.addEventListener('wheel', function(e) {
+                    if (e.deltaY !== 0) {
+                        const maxScrollLeft = streamingLogos.scrollWidth - streamingLogos.clientWidth;
+                        const currentScrollLeft = streamingLogos.scrollLeft;
+                        
+                        // Scrolling down (right) - only prevent if we can scroll right
+                        if (e.deltaY > 0 && currentScrollLeft < maxScrollLeft) {
+                            e.preventDefault();
+                            streamingLogos.scrollLeft += e.deltaY;
+                        }
+                        // Scrolling up (left) - only prevent if we can scroll left
+                        else if (e.deltaY < 0 && currentScrollLeft > 0) {
+                            e.preventDefault();
+                            streamingLogos.scrollLeft += e.deltaY;
+                        }
+                        // Otherwise, allow normal page scroll
+                    }
+                }, { passive: false });
+            }
+        });
     </script>
 </head>
 <body>
@@ -202,14 +257,14 @@
             </a>
         </div>
     </section>
-    <section>
+    <section class="socials-section">
         <h2>socials</h2>
-        <a href="https://instagram.com/dipnaked">instagram</a>
-        <br/>
-        <a href="https://www.threads.com/@dipnaked">threads</a>
-        <br/>
-        <a href="https://t.me/dipnaked">telegram</a>
-        <!-- <p><a href="https://youtube.com/c/dipnaked">youtube</a></p> -->
+        <div class="socials-links">
+            <a href="https://instagram.com/dipnaked">instagram</a>
+            <a href="https://www.threads.com/@dipnaked">threads</a>
+            <a href="https://t.me/dipnaked">telegram</a>
+            <!-- <a href="https://youtube.com/c/dipnaked">youtube</a> -->
+        </div>
     </section>
     <!-- <section>
         <h2>latest releases</h2>
