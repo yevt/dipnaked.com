@@ -20,30 +20,14 @@
             margin: 0;
             padding: 0;
             background-color: #131313;
-            overflow-x: hidden;
         }
         body {
             font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
-            text-align: center;
-            padding: 20px;
-            width: 248px;
+            width: 100vw;
+
         }
         section {
-            margin-bottom: 20px;
-            text-align: left;
-        }
-        section:first-child {
-            text-align: center;
-        }
-        section.streaming-section {
-            margin-left: -20px;
-            margin-right: -20px;
-            padding-left: 0;
-            padding-right: 0;
-        }
-        section.streaming-section h2 {
-            padding-left: 20px;
-            padding-right: 20px;
+            padding: 0 20px 0 20px;
         }
         a {
             text-decoration: none;
@@ -53,19 +37,6 @@
             display: inline-block;
             transition: all 0.3s ease;
         }
-        a:not(.streaming-logos a)::after {
-            content: '';
-            position: absolute;
-            width: 0;
-            height: 3px;
-            bottom: 0;
-            left: 0.05em;
-            background-color: rgba(0, 191, 166, 0.95);
-            transition: all 0.3s ease;
-        }
-        a:not(.streaming-logos a):hover::after {
-            width: calc(100% - 0.1em);
-        }
         img {
             width: 150px;
         }
@@ -74,42 +45,35 @@
             margin-bottom: 10px;
             font-size: 32px;
             font-weight: extra-bold;
-            text-align: right;
-            /* text-transform: uppercase; */
         }
         .streaming-logos {
-            display: flex;
             gap: 12px;
-            flex-wrap: nowrap;
+            /* flex-wrap: nowrap; */
             align-items: center;
-            overflow-x: auto;
-            overflow-y: hidden;
-            -webkit-overflow-scrolling: touch;
-            padding: 0 20px 8px 20px;
-            box-sizing: border-box;
-            width: 100%;
-            max-width: 288px;
+            /* overflow-x: auto; */
+            /* overflow-y: hidden; */
+            /* -webkit-overflow-scrolling: touch; */
+            /* padding: 0 20px 8px 20px; */
+            /* box-sizing: border-box; */
+            /* width: 100%; */
+            /* max-width: 288px; */
+            max-width: 100%;
+            
         }
-        .streaming-logos::-webkit-scrollbar {
+        /* .streaming-logos::-webkit-scrollbar {
             display: none;
-        }
-        .streaming-logos {
+        } */
+        /* .streaming-logos {
             scrollbar-width: none;
             -ms-overflow-style: none;
-        }
+        } */
         .streaming-logos a {
             display: inline-flex;
-            align-items: center;
+            /* align-items: center; */
             gap: 6px;
-            padding-bottom: 3px;
-            height: 28px;
-            flex-shrink: 0;
-        }
-        .streaming-logos a:first-child {
-            margin-left: 0;
-        }
-        .streaming-logos a:last-child {
-            margin-right: 0;
+            padding: 0 20px 20px 0;
+            /* height: 28px; */
+            /* flex-shrink: 0; */
         }
         .streaming-logos img {
             height: 28px;
@@ -117,12 +81,7 @@
             display: block;
         }
         
-        /* Socials horizontal scroll */
-        section.socials-section .socials-links {
-            margin-left: -20px;
-            margin-right: -20px;
-            width: calc(100% + 40px);
-        }
+
         .socials-links {
             display: flex;
             gap: 12px;
@@ -131,7 +90,7 @@
             overflow-x: auto;
             overflow-y: hidden;
             -webkit-overflow-scrolling: touch;
-            padding: 0 0 8px 20px;
+            padding: 0 0 8px 00px;
         }
         .socials-links::after {
             content: '';
@@ -177,40 +136,40 @@
         }
     </style>
     <script>
-        function scaleBody() {
-            const viewportWidth = window.innerWidth;
-            const baseWidth = 288; // 248px body content + 40px padding
-            const scale = viewportWidth / baseWidth;
-            document.body.style.zoom = scale;
-        }
+        // function scaleBody() {
+        //     const viewportWidth = window.innerWidth;
+        //     const baseWidth = 288; // 248px body content + 40px padding
+        //     const scale = viewportWidth / baseWidth;
+        //     document.body.style.zoom = scale;
+        // }
         
-        window.addEventListener('DOMContentLoaded', scaleBody);
-        window.addEventListener('resize', scaleBody);
+        // window.addEventListener('DOMContentLoaded', scaleBody);
+        // window.addEventListener('resize', scaleBody);
 
-        // Convert vertical scroll to horizontal scroll for streaming logos
-        document.addEventListener('DOMContentLoaded', function() {
-            const streamingLogos = document.querySelector('.streaming-logos');
-            if (streamingLogos) {
-                streamingLogos.addEventListener('wheel', function(e) {
-                    if (e.deltaY !== 0) {
-                        const maxScrollLeft = streamingLogos.scrollWidth - streamingLogos.clientWidth;
-                        const currentScrollLeft = streamingLogos.scrollLeft;
+        // // Convert vertical scroll to horizontal scroll for streaming logos
+        // document.addEventListener('DOMContentLoaded', function() {
+        //     const streamingLogos = document.querySelector('.streaming-logos');
+        //     if (streamingLogos) {
+        //         streamingLogos.addEventListener('wheel', function(e) {
+        //             if (e.deltaY !== 0) {
+        //                 const maxScrollLeft = streamingLogos.scrollWidth - streamingLogos.clientWidth;
+        //                 const currentScrollLeft = streamingLogos.scrollLeft;
                         
-                        // Scrolling down (right) - only prevent if we can scroll right
-                        if (e.deltaY > 0 && currentScrollLeft < maxScrollLeft) {
-                            e.preventDefault();
-                            streamingLogos.scrollLeft += e.deltaY;
-                        }
-                        // Scrolling up (left) - only prevent if we can scroll left
-                        else if (e.deltaY < 0 && currentScrollLeft > 0) {
-                            e.preventDefault();
-                            streamingLogos.scrollLeft += e.deltaY;
-                        }
-                        // Otherwise, allow normal page scroll
-                    }
-                }, { passive: false });
-            }
-        });
+        //                 // Scrolling down (right) - only prevent if we can scroll right
+        //                 if (e.deltaY > 0 && currentScrollLeft < maxScrollLeft) {
+        //                     e.preventDefault();
+        //                     streamingLogos.scrollLeft += e.deltaY;
+        //                 }
+        //                 // Scrolling up (left) - only prevent if we can scroll left
+        //                 else if (e.deltaY < 0 && currentScrollLeft > 0) {
+        //                     e.preventDefault();
+        //                     streamingLogos.scrollLeft += e.deltaY;
+        //                 }
+        //                 // Otherwise, allow normal page scroll
+        //             }
+        //         }, { passive: false });
+        //     }
+        // });
     </script>
 </head>
 <body>
