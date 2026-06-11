@@ -82,37 +82,56 @@
         }
         
 
-        .socials-links {
+        .lang-toggle {
+            position: fixed;
+            top: 16px;
+            right: 20px;
             display: flex;
-            gap: 12px;
-            flex-wrap: nowrap;
-            align-items: center;
-            overflow-x: auto;
-            overflow-y: hidden;
-            -webkit-overflow-scrolling: touch;
-            padding: 0 0 8px 00px;
+            gap: 4px;
+            z-index: 10;
         }
-        .socials-links::after {
+        .lang-toggle button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 14px;
+            color: #434342;
+            padding: 2px 4px;
+            transition: color 0.2s ease;
+        }
+        .lang-toggle button.active {
+            color: #B4B5B2;
+        }
+        .lang-toggle button:hover {
+            color: #B4B5B2;
+        }
+        .section-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0;
+        }
+        .section-links a {
+            padding: 0 20px 20px 0;
+        }
+        .section-links span {
+            font-size: 14px;
+            display: block;
+            line-height: 28px;
+            position: relative;
+        }
+        .section-links span::after {
             content: '';
-            padding-right: 20px;
+            position: absolute;
+            width: 0;
+            height: 2px;
+            bottom: 0;
+            left: 0.05em;
+            background-color: rgba(0, 191, 166, 0.95);
+            transition: all 0.3s ease;
         }
-        .socials-links::-webkit-scrollbar {
-            height: 8px;
-        }
-        .socials-links::-webkit-scrollbar-track {
-            background: rgba(67, 67, 66, 0.2);
-            border-radius: 4px;
-        }
-        .socials-links::-webkit-scrollbar-thumb {
-            background: #434342;
-            border-radius: 4px;
-        }
-        .socials-links::-webkit-scrollbar-thumb:hover {
-            background: #B4B5B2;
-        }
-        .socials-links a {
-            flex-shrink: 0;
-            white-space: nowrap;
+        .section-links a:hover span::after {
+            width: calc(100% - 0.1em);
         }
         .streaming-logos span {
             font-size: 14px;
@@ -136,48 +155,46 @@
         }
     </style>
     <script>
-        // function scaleBody() {
-        //     const viewportWidth = window.innerWidth;
-        //     const baseWidth = 288; // 248px body content + 40px padding
-        //     const scale = viewportWidth / baseWidth;
-        //     document.body.style.zoom = scale;
-        // }
-        
-        // window.addEventListener('DOMContentLoaded', scaleBody);
-        // window.addEventListener('resize', scaleBody);
+        const i18n = {
+            ru: {
+                music: 'Музыка',
+                guitar: 'Гитарные штуки',
+                splash: 'ВСПЛЕСК',
+            },
+            en: {
+                music: 'Music',
+                guitar: 'Guitar Things',
+                splash: 'SPLASH',
+            }
+        };
 
-        // // Convert vertical scroll to horizontal scroll for streaming logos
-        // document.addEventListener('DOMContentLoaded', function() {
-        //     const streamingLogos = document.querySelector('.streaming-logos');
-        //     if (streamingLogos) {
-        //         streamingLogos.addEventListener('wheel', function(e) {
-        //             if (e.deltaY !== 0) {
-        //                 const maxScrollLeft = streamingLogos.scrollWidth - streamingLogos.clientWidth;
-        //                 const currentScrollLeft = streamingLogos.scrollLeft;
-                        
-        //                 // Scrolling down (right) - only prevent if we can scroll right
-        //                 if (e.deltaY > 0 && currentScrollLeft < maxScrollLeft) {
-        //                     e.preventDefault();
-        //                     streamingLogos.scrollLeft += e.deltaY;
-        //                 }
-        //                 // Scrolling up (left) - only prevent if we can scroll left
-        //                 else if (e.deltaY < 0 && currentScrollLeft > 0) {
-        //                     e.preventDefault();
-        //                     streamingLogos.scrollLeft += e.deltaY;
-        //                 }
-        //                 // Otherwise, allow normal page scroll
-        //             }
-        //         }, { passive: false });
-        //     }
-        // });
+        function setLang(lang) {
+            localStorage.setItem('lang', lang);
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                el.textContent = i18n[lang][el.dataset.i18n];
+            });
+            document.querySelectorAll('.lang-toggle button').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.lang === lang);
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const saved = localStorage.getItem('lang');
+            const browser = (navigator.language || navigator.userLanguage || 'ru').startsWith('ru') ? 'ru' : 'en';
+            setLang(saved || browser);
+        });
     </script>
 </head>
 <body>
+    <div class="lang-toggle">
+        <button data-lang="ru" onclick="setLang('ru')">ru</button>
+        <button data-lang="en" onclick="setLang('en')">en</button>
+    </div>
     <section>
         <a href="https://www.dipnaked.com/"><img src="./logo.png" alt="Dipnaked Logo"></a>
     </section>
-    <section class="streaming-section">
-        <h2>streamings</h2>
+    <section class="music-section">
+        <h2><span data-i18n="music">музыка</span></h2>
         <div class="streaming-logos">
             <a href="https://open.spotify.com/artist/5x1f95Qpvhruom1A7cyjxF" target="_blank" rel="noopener">
                 <img src="/assets/icons/spotify.svg" alt="Spotify">
@@ -187,6 +204,10 @@
                 <img src="/assets/icons/applemusic.svg" alt="Apple Music">
                 <span>apple music</span>
             </a>
+            <a href="https://music.youtube.com/channel/UCBxLx6ozyCb0p3L0XVZ1_3Q" target="_blank" rel="noopener">
+                <img src="/assets/icons/ytmusic.png" alt="YouTube Music">
+                <span>youtube music</span>
+            </a>
             <a href="https://music.yandex.ru/artist/22069421" target="_blank" rel="noopener">
                 <img src="/assets/icons/yandexmusic.png" alt="Yandex Music">
                 <span>yandex music</span>
@@ -195,9 +216,9 @@
                 <img src="/assets/icons/vk.svg" alt="VK Music">
                 <span>vk music</span>
             </a>
-            <a href="https://music.youtube.com/channel/UCBxLx6ozyCb0p3L0XVZ1_3Q" target="_blank" rel="noopener">
-                <img src="/assets/icons/ytmusic.png" alt="YouTube Music">
-                <span>youtube music</span>
+            <a href="https://music.amazon.com/artists/B0CXN1TXQV/dipnaked" target="_blank" rel="noopener">
+                <img src="/assets/icons/amazonmusic.png" alt="Amazon Music">
+                <span>amazon music</span>
             </a>
             <a href="https://www.deezer.com/us/artist/258018432" target="_blank" rel="noopener">
                 <img src="/assets/icons/deezer.png" alt="Deezer">
@@ -207,29 +228,27 @@
                 <img src="/assets/icons/tidal.png" alt="Tidal">
                 <span>tidal</span>
             </a>
-            <a href="https://music.amazon.com/artists/B0CXN1TXQV/dipnaked" target="_blank" rel="noopener">
-                <img src="/assets/icons/amazonmusic.png" alt="Amazon Music">
-            </a>
             <a href="https://soundcloud.com/dipnaked-music" target="_blank" rel="noopener">
                 <img src="/assets/icons/soundcloud.png" alt="SoundCloud">
                 <span>soundcloud</span>
             </a>
         </div>
     </section>
-    <section class="socials-section">
-        <h2>socials</h2>
-        <div class="socials-links">
-            <a href="https://instagram.com/dipnaked">instagram</a>
-            <!-- <a href="https://www.threads.com/@dipnaked">threads</a> -->
-            <a href="https://t.me/dipnaked">telegram</a>
-            <a href="https://youtube.com/c/dipnaked">youtube</a>
+    <section class="guitar-section">
+        <h2><span data-i18n="guitar">гитарные штуки</span></h2>
+        <div class="section-links">
+            <a href="https://www.youtube.com/watch?v=aPmW4ivG788&list=PLOJDfHvUUm2My1UriU9naaXOeSECEFQXk" target="_blank" rel="noopener">
+                <span>youtube</span>
+            </a>
         </div>
     </section>
-    <!-- <section>
-        <h2>latest releases</h2>
-        <a href="/releases/princess/">не моя принцесса</a>
-        <br/>
-        <a href="/releases/august/">август</a>
-    </section> -->
+    <section class="splash-section">
+        <h2><span data-i18n="splash">ВСПЛЕСК</span></h2>
+        <div class="section-links">
+            <a href="https://www.youtube.com/watch?v=kZdSrXMyJbo&list=PLOJDfHvUUm2POot4GpgXhPL3tiAQYiHeD" target="_blank" rel="noopener">
+                <span>youtube</span>
+            </a>
+        </div>
+    </section>
 </body>
 </html>
