@@ -153,18 +153,25 @@
         .streaming-logos a:hover span::after {
             width: calc(100% - 0.1em);
         }
+        .playlist-embed {
+            margin: 0 0 20px 0;
+            max-width: 560px;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+        }
+        .playlist-embed iframe {
+            width: 100%;
+            height: 100%;
+            border: 0;
+        }
     </style>
     <script>
         const i18n = {
             ru: {
                 music: 'Музыка',
-                guitar: 'Гитарные штуки',
-                splash: 'ВСПЛЕСК',
             },
             en: {
                 music: 'Music',
-                guitar: 'Guitar Things',
-                splash: 'SPLASH',
             }
         };
 
@@ -235,19 +242,27 @@
         </div>
     </section>
     <section class="guitar-section">
-        <h2><span data-i18n="guitar">гитарные штуки</span></h2>
-        <div class="section-links">
-            <a href="https://www.youtube.com/watch?v=aPmW4ivG788&list=PLOJDfHvUUm2My1UriU9naaXOeSECEFQXk" target="_blank" rel="noopener">
-                <span>youtube</span>
-            </a>
+        <h2><span>Guitar Things</span></h2>
+        <div class="playlist-embed">
+            <iframe
+                src="https://www.youtube.com/embed/videoseries?list=PLOJDfHvUUm2My1UriU9naaXOeSECEFQXk"
+                title="Guitar Things playlist"
+                loading="lazy"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowfullscreen>
+            </iframe>
         </div>
     </section>
     <section class="splash-section">
-        <h2><span data-i18n="splash">ВСПЛЕСК</span></h2>
-        <div class="section-links">
-            <a href="https://www.youtube.com/watch?v=kZdSrXMyJbo&list=PLOJDfHvUUm2POot4GpgXhPL3tiAQYiHeD" target="_blank" rel="noopener">
-                <span>youtube</span>
-            </a>
+        <h2><span>SPLASH</span></h2>
+        <div class="playlist-embed">
+            <iframe
+                src="https://www.youtube.com/embed/videoseries?list=PLOJDfHvUUm2POot4GpgXhPL3tiAQYiHeD"
+                title="SPLASH playlist"
+                loading="lazy"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowfullscreen>
+            </iframe>
         </div>
     </section>
 </body>
