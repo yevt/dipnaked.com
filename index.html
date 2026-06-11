@@ -157,8 +157,8 @@
     <script>
         const i18n = {
             ru: {
-                music: 'музыка',
-                guitar: 'гитарные штуки',
+                music: 'Музыка',
+                guitar: 'Гитарные штуки',
                 splash: 'ВСПЛЕСК',
             },
             en: {
@@ -179,8 +179,9 @@
         }
 
         document.addEventListener('DOMContentLoaded', function() {
-            const saved = localStorage.getItem('lang') || 'ru';
-            setLang(saved);
+            const saved = localStorage.getItem('lang');
+            const browser = (navigator.language || navigator.userLanguage || 'ru').startsWith('ru') ? 'ru' : 'en';
+            setLang(saved || browser);
         });
     </script>
 </head>
