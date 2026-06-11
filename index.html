@@ -41,7 +41,7 @@
             width: 150px;
         }
         h2 {
-            color: #434342;
+            color: #B4B5B2;
             margin-bottom: 10px;
             font-size: 32px;
             font-weight: extra-bold;
@@ -164,14 +164,35 @@
             height: 100%;
             border: 0;
         }
+        .playlist-fallback {
+            display: none;
+            width: 100%;
+            height: 100%;
+        }
+        .playlist-fallback img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border: 0;
+        }
+        .playlist-embed.fallback-visible iframe {
+            display: none;
+        }
+        .playlist-embed.fallback-visible .playlist-fallback {
+            display: block;
+        }
     </style>
     <script>
         const i18n = {
             ru: {
                 music: 'Музыка',
+                guitarThings: 'Гитарные штуки',
+                splash: 'ВСПЛЕСК',
             },
             en: {
                 music: 'Music',
+                guitarThings: 'Guitar Things',
+                splash: 'SPLASH',
             }
         };
 
@@ -185,10 +206,38 @@
             });
         }
 
+        function showPlaylistFallback(container) {
+            if (!container) return;
+            container.classList.add('fallback-visible');
+        }
+
+        function onPlaylistIframeLoad(iframe) {
+            const container = iframe.closest('.playlist-embed');
+            if (!container) return;
+            container.dataset.loaded = 'true';
+            container.classList.remove('fallback-visible');
+        }
+
+        function onPlaylistIframeError(iframe) {
+            showPlaylistFallback(iframe.closest('.playlist-embed'));
+        }
+
+        function initPlaylistFallbacks() {
+            document.querySelectorAll('.playlist-embed iframe').forEach(iframe => {
+                const container = iframe.closest('.playlist-embed');
+                setTimeout(() => {
+                    if (container && container.dataset.loaded !== 'true') {
+                        showPlaylistFallback(container);
+                    }
+                }, 6000);
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             const saved = localStorage.getItem('lang');
             const browser = (navigator.language || navigator.userLanguage || 'ru').startsWith('ru') ? 'ru' : 'en';
             setLang(saved || browser);
+            initPlaylistFallbacks();
         });
     </script>
 </head>
@@ -201,7 +250,7 @@
         <a href="https://www.dipnaked.com/"><img src="./logo.png" alt="Dipnaked Logo"></a>
     </section>
     <section class="music-section">
-        <h2><span data-i18n="music">музыка</span></h2>
+        <h2><span data-i18n="music">Music</span></h2>
         <div class="streaming-logos">
             <a href="https://open.spotify.com/artist/5x1f95Qpvhruom1A7cyjxF" target="_blank" rel="noopener">
                 <img src="/assets/icons/spotify.svg" alt="Spotify">
@@ -242,27 +291,47 @@
         </div>
     </section>
     <section class="guitar-section">
-        <h2><span>Guitar Things</span></h2>
+        <h2><span data-i18n="guitarThings">Guitar Things</span></h2>
         <div class="playlist-embed">
             <iframe
                 src="https://www.youtube.com/embed/videoseries?list=PLOJDfHvUUm2My1UriU9naaXOeSECEFQXk"
                 title="Guitar Things playlist"
                 loading="lazy"
+                onload="onPlaylistIframeLoad(this)"
+                onerror="onPlaylistIframeError(this)"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowfullscreen>
             </iframe>
+            <a
+                class="playlist-fallback"
+                href="https://www.youtube.com/playlist?list=PLOJDfHvUUm2My1UriU9naaXOeSECEFQXk"
+                target="_blank"
+                rel="noopener"
+                aria-label="Guitar Things playlist fallback">
+                <img src="https://i.ytimg.com/vi_webp/videoseries/maxresdefault.jpg?list=PLOJDfHvUUm2My1UriU9naaXOeSECEFQXk" alt="Guitar Things playlist cover">
+            </a>
         </div>
     </section>
     <section class="splash-section">
-        <h2><span>SPLASH</span></h2>
+        <h2><span data-i18n="splash">SPLASH</span></h2>
         <div class="playlist-embed">
             <iframe
                 src="https://www.youtube.com/embed/videoseries?list=PLOJDfHvUUm2POot4GpgXhPL3tiAQYiHeD"
                 title="SPLASH playlist"
                 loading="lazy"
+                onload="onPlaylistIframeLoad(this)"
+                onerror="onPlaylistIframeError(this)"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowfullscreen>
             </iframe>
+            <a
+                class="playlist-fallback"
+                href="https://www.youtube.com/playlist?list=PLOJDfHvUUm2POot4GpgXhPL3tiAQYiHeD"
+                target="_blank"
+                rel="noopener"
+                aria-label="SPLASH playlist fallback">
+                <img src="https://i.ytimg.com/vi_webp/videoseries/maxresdefault.jpg?list=PLOJDfHvUUm2POot4GpgXhPL3tiAQYiHeD" alt="SPLASH playlist cover">
+            </a>
         </div>
     </section>
 </body>
