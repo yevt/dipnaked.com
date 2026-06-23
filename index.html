@@ -29,9 +29,12 @@
         section {
             padding: 0 20px 0 20px;
         }
+        .logo-section {
+            padding-top: 20px;
+        }
         a {
             text-decoration: none;
-            color: #B4B5B2;
+            color: #FFFFFF;
             font-size: 18px;
             position: relative;
             display: inline-block;
@@ -41,7 +44,7 @@
             width: 150px;
         }
         h2 {
-            color: #B4B5B2;
+            color: #FFFFFF;
             margin-bottom: 10px;
             font-size: 32px;
             font-weight: extra-bold;
@@ -101,10 +104,10 @@
             transition: color 0.2s ease;
         }
         .lang-toggle button.active {
-            color: #B4B5B2;
+            color: #FFFFFF;
         }
         .lang-toggle button:hover {
-            color: #B4B5B2;
+            color: #FFFFFF;
         }
         .section-links {
             display: flex;
@@ -181,6 +184,37 @@
         .playlist-embed.fallback-visible .playlist-fallback {
             display: block;
         }
+        .experimental-link {
+            margin: 0 0 20px 0;
+            max-width: 560px;
+            width: 100%;
+        }
+        .experimental-link img {
+            width: 100%;
+            max-width: 560px;
+            height: auto;
+            display: block;
+            margin-bottom: 8px;
+        }
+        .experimental-link span {
+            font-size: 14px;
+            line-height: 28px;
+            position: relative;
+            display: inline-block;
+        }
+        .experimental-link span::after {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 2px;
+            bottom: 0;
+            left: 0.05em;
+            background-color: rgba(0, 191, 166, 0.95);
+            transition: all 0.3s ease;
+        }
+        .experimental-link:hover span::after {
+            width: calc(100% - 0.1em);
+        }
     </style>
     <script>
         const i18n = {
@@ -246,7 +280,7 @@
         <button data-lang="ru" onclick="setLang('ru')">ru</button>
         <button data-lang="en" onclick="setLang('en')">en</button>
     </div>
-    <section>
+    <section class="logo-section">
         <a href="https://www.dipnaked.com/"><img src="./logo.png" alt="Dipnaked Logo"></a>
     </section>
     <section class="music-section">
@@ -333,6 +367,13 @@
                 <img src="https://i.ytimg.com/vi_webp/videoseries/maxresdefault.jpg?list=PLOJDfHvUUm2POot4GpgXhPL3tiAQYiHeD" alt="SPLASH playlist cover">
             </a>
         </div>
+    </section>
+    <section class="experimental-section">
+        <h2>expetimental graphic</h2>
+        <a class="experimental-link" href="https://www.instagram.com/snailstrobe/" target="_blank" rel="noopener">
+            <img src="https://www.instagram.com/snailstrobe/media/?size=l" alt="snailstrobe first post">
+            <span>expetimental graphic</span>
+        </a>
     </section>
 </body>
 </html>
