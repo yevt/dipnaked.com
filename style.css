@@ -1,0 +1,61 @@
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; padding: 0; }
+body { -webkit-font-smoothing: antialiased; overflow: hidden; }
+img { display: block; max-width: 100%; }
+
+body {
+    background: #000;
+    color: #ccc;
+    font: 12px/1.5 "Satoshi", -apple-system, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 100vh;
+    padding-top: 30vh;
+}
+
+.center-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    /* gap: 24px; */
+}
+
+.logo { width: 150px; }
+
+.text-block {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    width: fit-content;
+}
+
+.brand-name { letter-spacing: 0.9ch; }
+
+.tagline {
+    width: 0;
+    white-space: nowrap;
+    letter-spacing: 0.5ch;
+    font-style: italic;
+    margin-top: 8px;
+    /* margin-bottom: 8px; */
+}
+
+.links {
+    display: flex;
+    flex-direction: column;
+    width: 0;
+    white-space: nowrap;
+    gap: 24px;
+    letter-spacing: 1ch;
+    margin-top: 16px;
+}
+
+a { color: #ccc; text-decoration: none; transition: opacity 0.2s ease; }
+a:hover { opacity: 0.7; }
+
+/* breadcrumb extension — grows right without affecting layout width */
+.crumb { display: inline-block; width: 0; white-space: nowrap; overflow: visible; }
+.crumb::before { content: '\00A0'; }
