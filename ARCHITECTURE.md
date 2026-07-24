@@ -1,71 +1,70 @@
 # Architecture — dipnaked.com
 
 ## Overview
-Root landing page (`index.html`) with clean, centered layout. Flexible vertical layout that remains centered as content grows.
+Root landing page (`index.html`) with a micro-modular grid layout. Content block
+is bounding-box-centered in the viewport when it fits; gracefully scrolls (minimal
+scroll) when it doesn't.
 
-## Structure
-
-### Layout Hierarchy
+## Layout Hierarchy
 ```
-body (flex center/center, min-height 100vh)
-└─ .center-block (flex column, align-items flex-start)
-   ├─ .logo (150px width)
-   ├─ .brand-name (text)
-   ├─ .tagline (text)
-   └─ .links (flex row)
+body (flex column, overflow:auto, padding:var(--edge))
+└─ .center-block (flex column, margin:auto → safe centering)
+   ├─ a > img.logo
+   └─ .text-block (flex column, max-width capped to viewport)
+      ├─ .brand-name
+      ├─ .tagline       ← next line after brand-name
+      └─ .links         ← 2 modules below tagline; 1 module between items
 ```
 
-### Design Principles
-- **Vertical centering**: Entire `.center-block` is centered on viewport
-- **Horizontal alignment**: All content left-aligned within the block
-- **Growth**: As more elements are added, block expands vertically, always remains centered
-- **Padding**: 24px horizontal, 16px responsive to viewport size
+## Design System
+
+### Micro-module grid
+All vertical spacing is expressed in multiples of `--mm` (= line-height = 16px).
+The logo height is also snapped to the grid via `--logo-lines`.
+Tune these via CSS custom properties in `:root`.
+
+### Safe viewport centering
+`margin: auto` on `.center-block` inside a flex column distributes free space on
+all sides, centering the block by its bounding-box. When the block exceeds the
+viewport, the margin collapses to zero and `overflow: auto` on `body` adds just
+enough scroll to reveal the content.
+
+Minimum `--edge` (= 1 module) clearance is always preserved via `body` padding.
+`100dvh` is used (with `100vh` fallback) to account for mobile browser chrome.
+
+### Horizontal overflow / line wrapping
+Long lines (e.g. the tagline) wrap at word boundaries before the block exceeds
+the viewport. If even the longest single word doesn't fit, a horizontal scrollbar
+appears for exactly the needed width. Letter-spacing is progressively reduced at
+narrow breakpoints (≤ 420px and ≤ 300px) to preserve the rarefied typographic
+feel as long as possible.
 
 ## Typography
 - **Font**: Satoshi (400, 500, 700 weights from Fontshare CDN)
-- **Base size**: 12px
-- **Letter spacing**: 1ch (≈ width of 1 character)
-- **Color**: White (#ffffff) on black background (#000000)
+- **Base size**: 12px / 16px line-height
+- **Letter-spacing**: `--ls-brand` 0.9ch · `--ls-tagline` 0.5ch · `--ls-links` 1ch
+- **Palette**: `--color-text` #ccc on `--color-bg` #000; tagline `--color-tagline` #a3a3a3
 
-## Content Sections
-
-### Logo
-- File: `logo.png` (150px fixed width)
-- Margin below: 8px extra (total gap 24px from next element)
-
-### Brand Name (Lettering)
-- Text: "dipnaked"
-- Weight: 500 (medium)
-- Transform: uppercase
-- Style: Satoshi, 12px, 1ch letter-spacing
-
-### Tagline
-- Text: "if affair with the abbys"
-- Weight: 400 (regular)
-- Style: Satoshi, 12px, 1ch letter-spacing
-
-### Links
-- Three items: "listen", "watch", "look"
-- Layout: flex row, 24px gap between items
-- "listen" links to `/releases/august/`
-- "watch" and "look" are placeholders (#watch, #look)
-
-## Styling Features
-- **Reset**: Universal box-sizing, margin/padding zeroed on html/body
-- **Transitions**: Links fade to 0.7 opacity on hover (200ms)
-- **Font smoothing**: Antialiased on all platforms
-- **Responsive**: Handles mobile via padding and flexible sizing
+## CSS Custom Properties (tune in `:root`)
+| Variable          | Default       | Purpose                            |
+|-------------------|---------------|------------------------------------|
+| `--mm`            | 16px          | Micro-module = line-height         |
+| `--font-size`     | 12px          | Base font size                     |
+| `--color-bg`      | #000          | Page background                    |
+| `--color-text`    | #ccc          | Primary text / link color          |
+| `--color-tagline` | #a3a3a3       | Tagline text (slightly greyer)     |
+| `--ls-brand`      | 0.9ch         | Brand name letter-spacing          |
+| `--ls-tagline`    | 0.5ch         | Tagline letter-spacing             |
+| `--ls-links`      | 1ch           | Links letter-spacing               |
+| `--logo-width`    | 150px         | Logo rendered width                |
+| `--logo-lines`    | 9             | Logo height in micro-modules       |
+| `--edge`          | var(--mm)     | Min clearance from viewport edge   |
 
 ## Files
-- `index.html` — Main landing page (this file)
-- `logo.png` — Brand logo (correlated with `.logo` class)
+- `index.html` — Main landing page
+- `style.css` — All styles; theme tokens in `:root`
+- `logo.png` — Brand logo
 - `assets/icons/` — Icons for music services (used in release pages)
 - `assets/logos/` — Additional logos (e.g., Spotify)
-- `releases/august/index.html` — Release page (linked from "listen")
-- `releases/princess/index.html` — Release page (future)
-
-## Future Extensions
-- Add social links (Instagram, Twitter, etc.) as flex items
-- Update "watch" and "look" hrefs to actual resources
-- Potentially add hover effects to logo or brand name
-- Consider animation/fade-in on page load
+- `releases/august/index.html` — Release page
+- `releases/princess/index.html` — Release page

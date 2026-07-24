@@ -1,61 +1,144 @@
+/* ============================================================
+   Theme tokens — tune freely
+   ============================================================ */
+:root {
+    /* micro-module: base unit = line-height */
+    --mm:            16px;
+    --font-size:     12px;
+
+    /* palette */
+    --color-bg:      #000;
+    --color-text:    #ccc;
+    --color-tagline: #a3a3a3;   /* slightly darker than --color-text */
+
+    /* letter-spacing — sacrificed on narrow viewports */
+    --ls-brand:      0.9ch;
+    --ls-tagline:    0.5ch;
+    --ls-links:      1ch;
+
+    /* logo */
+    --logo-width:    150px;
+    --logo-lines:    9;          /* logo height in micro-modules; tune to image aspect ratio */
+
+    /* minimum clearance from any viewport edge */
+    --edge:          var(--mm);
+}
+
+/* Narrow: progressively reduce letter-spacing to fit content */
+@media (max-width: 420px) {
+    :root {
+        --ls-brand:   0.4ch;
+        --ls-tagline: 0.2ch;
+        --ls-links:   0.5ch;
+    }
+}
+
+@media (max-width: 300px) {
+    :root {
+        --ls-brand:   0;
+        --ls-tagline: 0;
+        --ls-links:   0;
+    }
+}
+
+/* ============================================================
+   Reset
+   ============================================================ */
 *, *::before, *::after { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; padding: 0; }
-body { -webkit-font-smoothing: antialiased; overflow: hidden; }
-img { display: block; max-width: 100%; }
+html, body              { height: 100%; margin: 0; padding: 0; }
+img                     { display: block; }
 
+/* ============================================================
+   Viewport — safe centering: centered when content fits,
+   scrollable (minimally) when it doesn't
+   ============================================================ */
 body {
-    background: #000;
-    color: #ccc;
-    font: 12px/1.5 "Satoshi", -apple-system, sans-serif;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    min-height: 100vh;
-    padding-top: 30vh;
+    background:             var(--color-bg);
+    color:                  var(--color-text);
+    font:                   var(--font-size) / var(--mm) "Satoshi", -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+
+    display:                flex;
+    flex-direction:         column;
+    min-height:             100vh;    /* fallback */
+    min-height:             100dvh;   /* accounts for mobile chrome bar */
+    overflow:               auto;
+    padding:                var(--edge);
 }
 
+/* ============================================================
+   Center block — bounding-box centered in viewport.
+   margin:auto distributes free space on all sides;
+   collapses to 0 when overflowing → reveals scrollbar.
+   ============================================================ */
 .center-block {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    /* gap: 24px; */
+    flex:             none;   /* intrinsic sizing, no grow/shrink */
+    margin:           auto;
+
+    display:          flex;
+    flex-direction:   column;
+    align-items:      flex-start;
 }
 
-.logo { width: 150px; }
+/* anchor wrapping the logo: treat as block to suppress inline gap */
+.center-block > a {
+    display:     block;
+    line-height: 0;
+}
 
+/* ============================================================
+   Logo — participates in the grid
+   ============================================================ */
+.logo {
+    width:            var(--logo-width);
+    height:           calc(var(--logo-lines) * var(--mm));
+    object-fit:       contain;
+    object-position:  left center;
+    margin-bottom:    var(--mm);   /* 1 module gap to brand name */
+}
+
+/* ============================================================
+   Text block — left-aligned to logo edge
+   ============================================================ */
 .text-block {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 16px;
-    width: fit-content;
+    display:          flex;
+    flex-direction:   column;
+    align-items:      flex-start;
+    /* cap width so long lines wrap before the block overflows the viewport */
+    max-width:        calc(100vw - 2 * var(--edge));
 }
 
-.brand-name { letter-spacing: 0.9ch; }
+.brand-name {
+    letter-spacing: var(--ls-brand);
+}
 
+/* tagline: next line immediately after brand name */
 .tagline {
-    width: 0;
-    white-space: nowrap;
-    letter-spacing: 0.5ch;
-    font-style: italic;
-    margin-top: 8px;
-    /* margin-bottom: 8px; */
+    letter-spacing: var(--ls-tagline);
+    font-style:     italic;
+    color:          var(--color-tagline);
+    max-width:      100%;   /* wraps at .text-block boundary */
+    overflow-wrap:  normal;
+    word-break:     normal;
 }
 
+/* links: 2 blank lines below tagline; 1 blank line between items */
 .links {
-    display: flex;
-    flex-direction: column;
-    width: 0;
-    white-space: nowrap;
-    gap: 24px;
-    letter-spacing: 1ch;
-    margin-top: 16px;
+    display:          flex;
+    flex-direction:   column;
+    gap:              var(--mm);
+    margin-top:       calc(2 * var(--mm));
+    letter-spacing:   var(--ls-links);
 }
 
-a { color: #ccc; text-decoration: none; transition: opacity 0.2s ease; }
+/* ============================================================
+   Global link style
+   ============================================================ */
+a { color: var(--color-text); text-decoration: none; transition: opacity 0.2s ease; }
 a:hover { opacity: 0.7; }
 
-/* breadcrumb extension — grows right without affecting layout width */
-.crumb { display: inline-block; width: 0; white-space: nowrap; overflow: visible; }
+/* ============================================================
+   Breadcrumb utility
+   ============================================================ */
+.crumb         { display: inline-block; width: 0; white-space: nowrap; overflow: visible; }
 .crumb::before { content: '\00A0'; }
