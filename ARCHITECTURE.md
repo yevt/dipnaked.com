@@ -68,3 +68,6 @@ feel as long as possible.
 - `assets/logos/` — Additional logos (e.g., Spotify)
 - `releases/august/index.html` — Release page
 - `releases/princess/index.html` — Release page
+- `lab/membrane/` — Experimental 3D logo animation (point piercing a stretched
+  film; Verlet mass–spring simulation, all constants in `CONFIG`, GUI on `H`).
+  Not linked from the main site.

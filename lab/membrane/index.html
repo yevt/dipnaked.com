@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en" style="background:#000">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>dipnaked — membrane lab</title>
+    <link rel="icon" href="/logo.png" />
+    <style>
+        html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "./vendor/three.module.min.js",
+            "lil-gui": "./vendor/lil-gui.esm.min.js"
+        }
+    }
+    </script>
+    <script type="module" src="./membrane.js"></script>
+</body>
+</html>
