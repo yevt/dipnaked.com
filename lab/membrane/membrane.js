@@ -126,6 +126,9 @@ const CONFIG = {
         timeScale: 1.0,           // global slow-motion factor
         restPause: 1.5,           // s of calm film between cycles
     },
+    debug: {
+        showContact: false,       // wireframe contact sphere + penetrating faces in red
+    },
 };
 
 // Small deterministic RNG (mulberry32) — all chaos is reproducible via seed.
@@ -347,6 +350,7 @@ function buildMembrane() {
     buildJitter();
     rebuildIndex();
     updateColors();
+    rebuildDebugOverlay();
 }
 
 // Seeded per-vertex / per-link imperfection — nothing in the real world is
@@ -396,6 +400,76 @@ function applyBallLook() {
 }
 
 // ----------------------------------------------------------------------------
+// Contact debug overlay (GUI toggle, off by default): a wireframe sphere at
+// the exact visible ball radius, red highlighting of any membrane face whose
+// closest point lies inside that radius, and a max-penetration readout.
+// With the face–sphere collision pass active the readout should stay at ~0.
+// ----------------------------------------------------------------------------
+const debugState = { maxPenetration: 0 };
+const debugSphere = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 24, 16),
+    new THREE.MeshBasicMaterial({ color: '#ff3355', wireframe: true, depthTest: false, transparent: true, opacity: 0.8 }));
+debugSphere.renderOrder = 2;
+debugSphere.visible = false;
+tiltGroup.add(debugSphere);
+let debugFaceMesh = null;
+
+function rebuildDebugOverlay() {
+    if (debugFaceMesh) {
+        tiltGroup.remove(debugFaceMesh);
+        debugFaceMesh.geometry.dispose();
+        debugFaceMesh.material.dispose();
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', mem.geometry.attributes.position); // shared, live
+    g.setIndex(new THREE.BufferAttribute(new Uint32Array(mem.tris.length * 3), 1));
+    g.setDrawRange(0, 0);
+    debugFaceMesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({
+        color: '#ff3355', side: THREE.DoubleSide, depthTest: false, transparent: true, opacity: 0.55 }));
+    debugFaceMesh.renderOrder = 3;
+    debugFaceMesh.visible = false;
+    debugFaceMesh.frustumCulled = false;
+    tiltGroup.add(debugFaceMesh);
+}
+
+// Per-frame diagnostic: closest point of every intact face vs the visible
+// radius. Highlights penetrating faces and reports the deepest cut.
+function updateContactDebug() {
+    const on = CONFIG.debug.showContact && ballEngaged && phase === Phase.APPROACH;
+    debugSphere.visible = on;
+    if (debugFaceMesh) debugFaceMesh.visible = on;
+    if (!on) { debugState.maxPenetration = 0; return; }
+    debugSphere.position.copy(ballPos);
+    debugSphere.scale.setScalar(CONFIG.ball.radius);
+    const { pos, tris, constraints } = mem;
+    const r = CONFIG.ball.radius;
+    const r2 = r * r;
+    const cx = ballPos.x, cy = ballPos.y, cz = ballPos.z;
+    const idx = debugFaceMesh.geometry.index.array;
+    let n = 0, maxPen = 0;
+    for (const t of tris) {
+        if (constraints[t.e0].broken || constraints[t.e1].broken || constraints[t.e2].broken) continue;
+        const ja = t.a * 3, jb = t.b * 3, jc = t.c * 3;
+        const ax = pos[ja], ay = pos[ja + 1], az = pos[ja + 2];
+        const bx = pos[jb], by = pos[jb + 1], bz = pos[jb + 2];
+        const gx = pos[jc], gy = pos[jc + 1], gz = pos[jc + 2];
+        if (Math.min(ax, bx, gx) - r > cx || Math.max(ax, bx, gx) + r < cx ||
+            Math.min(ay, by, gy) - r > cy || Math.max(ay, by, gy) + r < cy ||
+            Math.min(az, bz, gz) - r > cz || Math.max(az, bz, gz) + r < cz) continue;
+        closestPointOnTriangle(cx, cy, cz, ax, ay, az, bx, by, bz, gx, gy, gz, _cp);
+        const dx = _cp.x - cx, dy = _cp.y - cy, dz = _cp.z - cz;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (!(d2 < r2)) continue;
+        const pen = r - Math.sqrt(d2);
+        if (pen > maxPen) maxPen = pen;
+        idx[n++] = t.a; idx[n++] = t.b; idx[n++] = t.c;
+    }
+    debugState.maxPenetration = maxPen;
+    debugFaceMesh.geometry.setDrawRange(0, n);
+    debugFaceMesh.geometry.index.needsUpdate = true;
+}
+
+// ----------------------------------------------------------------------------
 // State machine
 // ----------------------------------------------------------------------------
 const Phase = { REST: 'rest', APPROACH: 'approach', PIERCED: 'pierced', HEAL: 'heal' };
@@ -442,21 +516,118 @@ function stiffnessAt(strain, mat) {
     return mat.baseStiffness + (mat.maxStiffness - mat.baseStiffness) * Math.pow(t, mat.stiffenPower);
 }
 
-// Effective ball collision radius: visual radius + a sagitta margin derived
-// from the local mesh spacing. Vertices lying exactly on the sphere leave the
-// flat triangles between them (chords) cutting inside the ball, so the sphere
-// pokes through the intact film at contact. Colliding at radius + sagitta
-// keeps every chord outside the visible sphere: the membrane stretches around
-// the ball until it tears, with the ball never showing through.
+// Effective ball collision radius: the visual radius plus a hair-thin margin
+// against z-fighting. No sagitta inflation: the face–sphere pass below keeps
+// the flat triangles between vertices outside the ball, so vertices may sit
+// right on the surface — the funnel tip touches the sphere without a gap.
 function ballCollisionRadius() {
-    const r = CONFIG.ball.radius;
-    const R = Math.max(3, Math.round(CONFIG.membrane.rings));
-    const S = Math.max(8, Math.round(CONFIG.membrane.segments));
-    const dr = CONFIG.membrane.radius / R;
-    const contactRho = Math.min(CONFIG.membrane.radius, r + 2 * dr);
-    const chord = Math.hypot(dr, 2 * Math.PI * contactRho / S); // max cell diagonal in contact zone
-    const sagitta = (chord * chord) / (8 * Math.max(1e-4, r));
-    return r + Math.min(r, Math.max(0.02 * r, 1.25 * sagitta));
+    return CONFIG.ball.radius * 1.008;
+}
+
+// Closest point on triangle (a,b,c) to point p (Ericson, "Real-Time Collision
+// Detection"). Writes the point and its barycentric weights into `out`.
+function closestPointOnTriangle(px, py, pz, ax, ay, az, bx, by, bz, cx, cy, cz, out) {
+    const abx = bx - ax, aby = by - ay, abz = bz - az;
+    const acx = cx - ax, acy = cy - ay, acz = cz - az;
+    const apx = px - ax, apy = py - ay, apz = pz - az;
+    const d1 = abx * apx + aby * apy + abz * apz;
+    const d2 = acx * apx + acy * apy + acz * apz;
+    if (d1 <= 0 && d2 <= 0) { out.x = ax; out.y = ay; out.z = az; out.u = 1; out.v = 0; out.w = 0; return; }
+    const bpx = px - bx, bpy = py - by, bpz = pz - bz;
+    const d3 = abx * bpx + aby * bpy + abz * bpz;
+    const d4 = acx * bpx + acy * bpy + acz * bpz;
+    if (d3 >= 0 && d4 <= d3) { out.x = bx; out.y = by; out.z = bz; out.u = 0; out.v = 1; out.w = 0; return; }
+    const vc = d1 * d4 - d3 * d2;
+    if (vc <= 0 && d1 >= 0 && d3 <= 0) {
+        const t = d1 / (d1 - d3);
+        out.x = ax + abx * t; out.y = ay + aby * t; out.z = az + abz * t;
+        out.u = 1 - t; out.v = t; out.w = 0; return;
+    }
+    const cpx = px - cx, cpy = py - cy, cpz = pz - cz;
+    const d5 = abx * cpx + aby * cpy + abz * cpz;
+    const d6 = acx * cpx + acy * cpy + acz * cpz;
+    if (d6 >= 0 && d5 <= d6) { out.x = cx; out.y = cy; out.z = cz; out.u = 0; out.v = 0; out.w = 1; return; }
+    const vb = d5 * d2 - d1 * d6;
+    if (vb <= 0 && d2 >= 0 && d6 <= 0) {
+        const t = d2 / (d2 - d6);
+        out.x = ax + acx * t; out.y = ay + acy * t; out.z = az + acz * t;
+        out.u = 1 - t; out.v = 0; out.w = t; return;
+    }
+    const va = d3 * d6 - d5 * d4;
+    if (va <= 0 && (d4 - d3) >= 0 && (d5 - d6) >= 0) {
+        const t = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+        out.x = bx + (cx - bx) * t; out.y = by + (cy - by) * t; out.z = bz + (cz - bz) * t;
+        out.u = 0; out.v = 1 - t; out.w = t; return;
+    }
+    const sum = va + vb + vc;
+    if (!(sum > 1e-30)) { // degenerate (collapsed/collinear) triangle
+        out.x = ax; out.y = ay; out.z = az; out.u = 1; out.v = 0; out.w = 0; return;
+    }
+    const denom = 1 / sum;
+    const v = vb * denom, w = vc * denom;
+    out.x = ax + abx * v + acx * w; out.y = ay + aby * v + acy * w; out.z = az + abz * v + acz * w;
+    out.u = 1 - v - w; out.v = v; out.w = w;
+}
+
+// Face–sphere collision: for each intact triangle near the ball, find its
+// closest point to the ball center and, if it lies inside the collision
+// radius, push the three vertices out along (closest − center). The push is
+// distributed by barycentric weight × inverse mass (PBD projection of the
+// distance constraint on the face), so pinned vertices stay put. The vertex
+// pass alone leaves the flat triangles between on-surface vertices cutting
+// through the ball — this pass is what actually keeps the film outside it.
+const _cp = { x: 0, y: 0, z: 0, u: 0, v: 0, w: 0 };
+const _faceCand = []; // per-step candidate faces near the ball (reused array)
+
+// Broad-phase cull, once per physics step: only faces whose AABB comes within
+// r + slack of the ball center are tested per iteration. The slack absorbs
+// vertex movement during the solver iterations of the same step.
+function gatherBallFaceCandidates(r) {
+    const { pos, tris, constraints } = mem;
+    const m = 2 * r;
+    const cx = ballPos.x, cy = ballPos.y, cz = ballPos.z;
+    _faceCand.length = 0;
+    for (const t of tris) {
+        if (constraints[t.e0].broken || constraints[t.e1].broken || constraints[t.e2].broken) continue;
+        const ja = t.a * 3, jb = t.b * 3, jc = t.c * 3;
+        const ax = pos[ja], bx = pos[jb], gx = pos[jc];
+        if (Math.min(ax, bx, gx) - m > cx || Math.max(ax, bx, gx) + m < cx) continue;
+        const ay = pos[ja + 1], by = pos[jb + 1], gy = pos[jc + 1];
+        if (Math.min(ay, by, gy) - m > cy || Math.max(ay, by, gy) + m < cy) continue;
+        const az = pos[ja + 2], bz = pos[jb + 2], gz = pos[jc + 2];
+        if (Math.min(az, bz, gz) - m > cz || Math.max(az, bz, gz) + m < cz) continue;
+        _faceCand.push(t);
+    }
+}
+
+function collideFacesWithBall(r) {
+    const { pos, wArr } = mem;
+    const r2 = r * r;
+    const cx = ballPos.x, cy = ballPos.y, cz = ballPos.z;
+    for (const t of _faceCand) {
+        const ja = t.a * 3, jb = t.b * 3, jc = t.c * 3;
+        const ax = pos[ja], ay = pos[ja + 1], az = pos[ja + 2];
+        const bx = pos[jb], by = pos[jb + 1], bz = pos[jb + 2];
+        const gx = pos[jc], gy = pos[jc + 1], gz = pos[jc + 2];
+        // Broad phase: sphere vs triangle AABB — cheap reject away from contact
+        if (Math.min(ax, bx, gx) - r > cx || Math.max(ax, bx, gx) + r < cx ||
+            Math.min(ay, by, gy) - r > cy || Math.max(ay, by, gy) + r < cy ||
+            Math.min(az, bz, gz) - r > cz || Math.max(az, bz, gz) + r < cz) continue;
+        closestPointOnTriangle(cx, cy, cz, ax, ay, az, bx, by, bz, gx, gy, gz, _cp);
+        const dx = _cp.x - cx, dy = _cp.y - cy, dz = _cp.z - cz;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (!(d2 < r2) || !(d2 > 1e-12)) continue; // negated: also rejects NaN
+        const d = Math.sqrt(d2);
+        const pen = r - d;
+        const nx = dx / d, ny = dy / d, nz = dz / d;
+        const wa = wArr[t.a], wb = wArr[t.b], wc = wArr[t.c];
+        const denom = wa * _cp.u * _cp.u + wb * _cp.v * _cp.v + wc * _cp.w * _cp.w;
+        if (denom < 1e-12) continue;
+        const s = pen / denom;
+        pos[ja] += nx * s * wa * _cp.u; pos[ja + 1] += ny * s * wa * _cp.u; pos[ja + 2] += nz * s * wa * _cp.u;
+        pos[jb] += nx * s * wb * _cp.v; pos[jb + 1] += ny * s * wb * _cp.v; pos[jb + 2] += nz * s * wb * _cp.v;
+        pos[jc] += nx * s * wc * _cp.w; pos[jc + 1] += ny * s * wc * _cp.w; pos[jc + 2] += nz * s * wc * _cp.w;
+    }
 }
 
 function homeDist2(i) {
@@ -581,15 +752,17 @@ function physicsStep(dt) {
 
     // Constraint relaxation (PBD distance constraints, inverse-mass weighted).
     // The sphere is re-asserted as a hard collision constraint after every
-    // iteration: the distance solver keeps pulling vertices back toward rest and
-    // would let them sink through the ball, so any penetrating vertex is pushed
-    // back onto the surface each pass. This is what makes the film actually wrap
-    // the leading hemisphere at the contact point instead of the sphere showing
-    // through the intact film.
+    // iteration: first a cheap vertex pass, then a face–sphere pass that keeps
+    // the flat triangles between vertices from cutting inside the visible
+    // ball. The distance solver keeps pulling vertices back toward rest and
+    // would let them sink through the ball, so both passes run each iteration.
+    // This is what makes the film actually wrap the leading hemisphere at the
+    // contact point instead of the sphere showing through the intact film.
     const iters = Math.max(1, Math.round(CONFIG.membrane.iterations));
     const ballContact = ballEngaged && phase === Phase.APPROACH;
     const ballR = ballCollisionRadius();
     const ballR2 = ballR * ballR;
+    if (ballContact) gatherBallFaceCandidates(ballR);
     for (let it = 0; it < iters; it++) {
         for (const c of constraints) {
             if (c.k === 0) continue;
@@ -623,7 +796,14 @@ function physicsStep(dt) {
                     pos[j + 2] = ballPos.z + dz * push;
                 }
             }
+            collideFacesWithBall(ballR);
         }
+    }
+    // Final contact polish: neighbouring faces re-penetrate slightly when one
+    // face's vertices are pushed, so run a few extra face passes after the
+    // solver — what remains at render time is what the eye sees.
+    if (ballContact) {
+        for (let k = 0; k < 3; k++) collideFacesWithBall(ballR);
     }
 
     // Tearing: a link snaps when its strain exceeds the material threshold
@@ -823,6 +1003,7 @@ function tick(now) {
     if (ballEngaged) ballMesh.position.copy(ballPos);
     mem.geometry.attributes.position.needsUpdate = true;
     updateColors();
+    updateContactDebug();
     renderer.render(scene, camera);
 }
 
@@ -1077,6 +1258,12 @@ function buildGUI() {
         }
         if (sec.id !== 'material') folder.close();
     }
+
+    // Debug folder — outside PARAM_SCHEMA: never randomized, never pasted.
+    const dbg = gui.addFolder('debug');
+    dbg.add(CONFIG.debug, 'showContact').name('show contact');
+    dbg.add(debugState, 'maxPenetration').name('max face penetration').listen().disable();
+    dbg.close();
 
     gui.add({ 'randomize all': () => randomizeSections(PARAM_SCHEMA) }, 'randomize all');
     gui.add({ 'copy config': copyConfig }, 'copy config');
