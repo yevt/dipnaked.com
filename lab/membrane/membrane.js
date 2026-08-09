@@ -401,6 +401,7 @@ function applyBallLook() {
 const Phase = { REST: 'rest', APPROACH: 'approach', PIERCED: 'pierced', HEAL: 'heal' };
 let phase = Phase.REST;
 let phaseTime = 0;
+let ballEngaged = false;      // ball drives the physics (contact) this cycle
 let ballStuck = false;        // the point has caught the film's center
 let healedAt = -1;            // phaseTime when the last link re-knitted
 let cycleIndex = 0;
@@ -423,6 +424,7 @@ function restartCycle() {
     mem.spokesBroken = 0;
     rebuildIndex();
     ballMesh.visible = false;
+    ballEngaged = false;
     ballStuck = false;
     setPhase(Phase.REST);
 }
@@ -499,7 +501,7 @@ function physicsStep(dt) {
     // Ball motion + contact. The film both collides with and adheres to the
     // sphere (`grip`): the contact zone wraps the leading hemisphere, so the
     // ball first sinks into a dimple; free tension arcs start past its edge.
-    if (ballMesh.visible) {
+    if (ballEngaged) {
         const step = CONFIG.ball.speed * dt;
         ballPos.y -= step;
         if (phase === Phase.APPROACH) {
@@ -739,10 +741,12 @@ function tick(now) {
             // Punch-through: enough of the center has let go — the point passes.
             if (mem.spokesBroken >= mem.S * 0.5 || mem.brokenCount >= mem.S * 2) {
                 ballStuck = false;
+                ballMesh.visible = true; // reveal only once the film is ruptured
                 setPhase(Phase.PIERCED);
             } else if (-mem.pos[1] >= CONFIG.rupture.maxDepth) {
                 forceTear(FIXED_DT); // failsafe for materials too tough to tear
                 ballStuck = false;
+                ballMesh.visible = true;
                 setPhase(Phase.PIERCED);
             }
         } else if (phase === Phase.PIERCED) {
@@ -756,12 +760,16 @@ function tick(now) {
         const ang = cycleRng() * Math.PI * 2;
         const off = CONFIG.imperfection.entryOffset * (0.25 + 0.75 * cycleRng());
         ballPos.set(Math.cos(ang) * off, CONFIG.ball.startHeight, Math.sin(ang) * off);
-        ballMesh.visible = true;
+        ballEngaged = true;      // physics runs, but the sphere stays hidden
+        ballMesh.visible = false; // behind the intact film until it ruptures
         cycleIndex++;
         mem.tearRng = mulberry32(((Math.round(CONFIG.imperfection.seed) * 2654435761) ^ (cycleIndex * 40503)) >>> 0);
         setPhase(Phase.APPROACH);
     } else if (phase === Phase.PIERCED || phase === Phase.HEAL) {
-        if (ballMesh.visible && ballPos.y < -CONFIG.ball.exitDistance) ballMesh.visible = false;
+        if (ballEngaged && ballPos.y < -CONFIG.ball.exitDistance) {
+            ballMesh.visible = false;
+            ballEngaged = false;
+        }
         if (phase === Phase.HEAL) {
             const healed = mem.brokenCount === 0 && healedAt >= 0;
             if (healed && !ballMesh.visible && phaseTime - healedAt >= CONFIG.oscillation.settleTime) {
@@ -772,7 +780,7 @@ function tick(now) {
         }
     }
 
-    if (ballMesh.visible) ballMesh.position.copy(ballPos);
+    if (ballEngaged) ballMesh.position.copy(ballPos);
     mem.geometry.attributes.position.needsUpdate = true;
     updateColors();
     renderer.render(scene, camera);
