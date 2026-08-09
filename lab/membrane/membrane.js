@@ -562,8 +562,17 @@ function physicsStep(dt) {
         c.k = Math.min(1, stiffnessAt(strain, mat) * c.gw) * 0.5 * (stiffJit[c.a] + stiffJit[c.b]);
     }
 
-    // Constraint relaxation (PBD distance constraints, inverse-mass weighted)
+    // Constraint relaxation (PBD distance constraints, inverse-mass weighted).
+    // The sphere is re-asserted as a hard collision constraint after every
+    // iteration: the distance solver keeps pulling vertices back toward rest and
+    // would let them sink through the ball, so any penetrating vertex is pushed
+    // back onto the surface each pass. This is what makes the film actually wrap
+    // the leading hemisphere at the contact point instead of the sphere showing
+    // through the intact film.
     const iters = Math.max(1, Math.round(CONFIG.membrane.iterations));
+    const ballContact = ballEngaged && phase === Phase.APPROACH;
+    const ballR = CONFIG.ball.radius * 1.05;
+    const ballR2 = ballR * ballR;
     for (let it = 0; it < iters; it++) {
         for (const c of constraints) {
             if (c.k === 0) continue;
@@ -581,6 +590,22 @@ function physicsStep(dt) {
             const ox = dx * diff, oy = dy * diff, oz = dz * diff;
             pos[ja] += ox * wa; pos[ja + 1] += oy * wa; pos[ja + 2] += oz * wa;
             pos[jb] -= ox * wb; pos[jb + 1] -= oy * wb; pos[jb + 2] -= oz * wb;
+        }
+        if (ballContact) {
+            for (let i = 1; i < count; i++) {
+                if (pinned[i]) continue;
+                const j = i * 3;
+                const dx = pos[j] - ballPos.x;
+                const dy = pos[j + 1] - ballPos.y;
+                const dz = pos[j + 2] - ballPos.z;
+                const d2 = dx * dx + dy * dy + dz * dz;
+                if (d2 < ballR2 && d2 > 1e-12) {
+                    const push = ballR / Math.sqrt(d2);
+                    pos[j] = ballPos.x + dx * push;
+                    pos[j + 1] = ballPos.y + dy * push;
+                    pos[j + 2] = ballPos.z + dz * push;
+                }
+            }
         }
     }
 
@@ -741,12 +766,10 @@ function tick(now) {
             // Punch-through: enough of the center has let go — the point passes.
             if (mem.spokesBroken >= mem.S * 0.5 || mem.brokenCount >= mem.S * 2) {
                 ballStuck = false;
-                ballMesh.visible = true; // reveal only once the film is ruptured
                 setPhase(Phase.PIERCED);
             } else if (-mem.pos[1] >= CONFIG.rupture.maxDepth) {
                 forceTear(FIXED_DT); // failsafe for materials too tough to tear
                 ballStuck = false;
-                ballMesh.visible = true;
                 setPhase(Phase.PIERCED);
             }
         } else if (phase === Phase.PIERCED) {
@@ -760,8 +783,8 @@ function tick(now) {
         const ang = cycleRng() * Math.PI * 2;
         const off = CONFIG.imperfection.entryOffset * (0.25 + 0.75 * cycleRng());
         ballPos.set(Math.cos(ang) * off, CONFIG.ball.startHeight, Math.sin(ang) * off);
-        ballEngaged = true;      // physics runs, but the sphere stays hidden
-        ballMesh.visible = false; // behind the intact film until it ruptures
+        ballEngaged = true;      // physics runs and the sphere is drawn as it falls
+        ballMesh.visible = true;  // the film now wraps it, so it stays visible from any angle
         cycleIndex++;
         mem.tearRng = mulberry32(((Math.round(CONFIG.imperfection.seed) * 2654435761) ^ (cycleIndex * 40503)) >>> 0);
         setPhase(Phase.APPROACH);
