@@ -905,8 +905,8 @@ applyTilt();
 applyBallLook();
 buildMembrane();
 restartCycle();
-buildGUI();
+const gui = buildGUI();
 requestAnimationFrame(tick);
 
 // Console handle for quick tweaking: MEMBRANE.CONFIG.…, MEMBRANE.restart()
-window.MEMBRANE = { CONFIG, MATERIALS, restart: restartAll, get phase() { return phase; }, get mem() { return mem; } };
+window.MEMBRANE = { CONFIG, MATERIALS, gui, restart: restartAll, get phase() { return phase; }, get mem() { return mem; } };
