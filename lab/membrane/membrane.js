@@ -13,6 +13,17 @@
 //   • healing by growing home-springs + proximity re-knitting → real inertia:
 //     the film overshoots, sloshes and settles instead of lerping home
 //   • seeded imperfection: mass/stiffness/damping/tear jitter, entry offset
+//
+// Iteration 3 — contact quality:
+//   • center-densified rings (power-law radial distribution) → the contact
+//     patch has enough resolution to actually wrap the sphere
+//   • sticky adhesion contacts: vertices latch onto fixed spots on the sphere
+//     (bilateral PBD projection) and detach only when tension exceeds
+//     `adhesionStrength` → the film clings and follows the ball's shape
+//   • bend links relax inside the contact patch so the film can take the
+//     sphere's curvature
+//   • avalanche release at rupture: the first tear in the patch pops every
+//     sticky contact at once with a recoil impulse → a sharp, snappy burst
 // All tweakable constants live in CONFIG below (live-editable via GUI, press H).
 // ============================================================================
 
@@ -35,7 +46,9 @@ const MATERIALS = {
         bendStiffness: 0.03,   // straightening (2nd-neighbour) stiffness
         damping: 0.9985,       // internal velocity keep-factor
         massScale: 1.0,        // node inertia vs impulses (recoil, heal springs)
-        grip: 0.6,             // ball adhesion 0..1 (film wraps the sphere)
+        grip: 0.6,             // tangential drag on non-stuck contact vertices 0..1
+        adhesionStrength: 0.05, // sticky-contact detach threshold (drift, units); 0 = no sticking
+        adhesionZone: 0.8,     // fraction of the leading hemisphere where vertices may latch on
         tearStrain: 5.5,       // strain that snaps a link (latex stretches far)
         tearCascade: 0.8,      // neighbour threshold multiplier after a snap (unzip)
         recoil: 0.55,          // snap-back impulse per unit strain
@@ -45,25 +58,29 @@ const MATERIALS = {
     rubber: {
         baseStiffness: 0.10, stiffenStart: 0.05, stiffenSpan: 0.40, stiffenPower: 1.7,
         maxStiffness: 0.97, compressResist: 0.30, bendStiffness: 0.07, damping: 0.997,
-        massScale: 1.5, grip: 0.5, tearStrain: 2.6, tearCascade: 0.8, recoil: 0.45,
+        massScale: 1.5, grip: 0.5, adhesionStrength: 0.035, adhesionZone: 0.6,
+        tearStrain: 2.6, tearCascade: 0.8, recoil: 0.45,
         healSpring: 18, healSnap: 0.12,
     },
     silicone: {
         baseStiffness: 0.06, stiffenStart: 0.12, stiffenSpan: 0.70, stiffenPower: 1.5,
         maxStiffness: 0.90, compressResist: 0.25, bendStiffness: 0.05, damping: 0.985,
-        massScale: 1.2, grip: 0.85, tearStrain: 3.4, tearCascade: 0.85, recoil: 0.3,
+        massScale: 1.2, grip: 0.85, adhesionStrength: 0.09, adhesionZone: 0.95,
+        tearStrain: 3.4, tearCascade: 0.85, recoil: 0.3,
         healSpring: 10, healSnap: 0.14,
     },
     film: { // polyethylene: stiff from the start, near-cone, tears sharply
         baseStiffness: 0.65, stiffenStart: 0.0, stiffenSpan: 0.12, stiffenPower: 1.0,
         maxStiffness: 0.99, compressResist: 0.50, bendStiffness: 0.01, damping: 0.996,
-        massScale: 0.8, grip: 0.2, tearStrain: 1.3, tearCascade: 0.7, recoil: 0.9,
+        massScale: 0.8, grip: 0.2, adhesionStrength: 0.008, adhesionZone: 0.25,
+        tearStrain: 1.3, tearCascade: 0.7, recoil: 0.9,
         healSpring: 22, healSnap: 0.10,
     },
     spandex: { // fabric: floppy, folds freely, almost never tears by strain
         baseStiffness: 0.02, stiffenStart: 0.25, stiffenSpan: 0.90, stiffenPower: 2.0,
         maxStiffness: 0.80, compressResist: 0.05, bendStiffness: 0.005, damping: 0.997,
-        massScale: 0.9, grip: 0.7, tearStrain: 7.0, tearCascade: 0.9, recoil: 0.4,
+        massScale: 0.9, grip: 0.7, adhesionStrength: 0.06, adhesionZone: 0.85,
+        tearStrain: 7.0, tearCascade: 0.9, recoil: 0.4,
         healSpring: 9, healSnap: 0.16,
     },
 };
@@ -82,8 +99,9 @@ const CONFIG = {
     },
     membrane: {
         radius: 1.6,              // disc radius
-        rings: 26,                // radial resolution
+        rings: 34,                // radial resolution
         segments: 56,             // angular resolution
+        centerDensity: 2.0,       // ring distribution exponent: 1 = uniform, >1 packs rings toward the center (contact patch)
         iterations: 6,            // constraint solver iterations
         damping: 0.996,           // velocity keep-factor before rupture (× material damping)
         gravity: 0.0,             // optional sag (units/s², along -normal)
@@ -196,6 +214,9 @@ function buildMembrane() {
     const stiffJit = new Float32Array(count);    // per-vertex stiffness multiplier
     const wArr = new Float32Array(count);        // per-step working inverse masses
     const brokenTouch = new Uint16Array(count);  // broken links touching each vertex
+    const stick = new Uint8Array(count);         // sticky adhesion: vertex latched onto the ball
+    const stickBan = new Uint8Array(count);      // detached by force this cycle → no re-latch
+    const stickDir = new Float32Array(count * 3); // unit dir (ball center → contact spot)
 
     const idx = (ring, seg) => ring === 0 ? 0 : 1 + (ring - 1) * S + ((seg % S + S) % S);
 
@@ -205,13 +226,27 @@ function buildMembrane() {
     // strain piles up near a point load (∝ 1/r) — that is what bends the
     // profile into concave arcs. Without these weights every ring strains
     // equally and the deflection is a straight cone regardless of material.
-    const dr = radius / R;
+    //
+    // Ring radii pack toward the center (`centerDensity` exponent) so the
+    // ball's contact patch spans several cells and the film can actually wrap
+    // the sphere instead of tenting over it on 1–2 coarse rings. A linear
+    // blend keeps the innermost spacing bounded (a pure power law would give
+    // microscopic rest lengths → strain blow-ups). All shares/weights are
+    // computed from the true (non-uniform) ring radii, so the physics stays
+    // homogeneous.
+    const cd = Math.max(1, CONFIG.membrane.centerDensity || 1);
+    const CD_BLEND = 0.8; // power-law share; (1 - CD_BLEND) linear floor caps center fineness
+    const rrOf = (r) => {
+        const t = Math.max(0, r) / R;
+        return radius * ((1 - CD_BLEND) * t + CD_BLEND * Math.pow(t, cd));
+    };
+    const dr = radius / R;                                // uniform-grid reference spacing
     const shareRef = 2 * Math.PI * (radius / 2) * dr / S; // mid-disc vertex share
     const gwRef = (2 * Math.PI * (radius / 2) / S) / dr;  // mid-disc radial link
 
     for (let r = 0; r <= R; r++) {
         if (r === 0) { ringOf[0] = 0; continue; }
-        const rr = (r / R) * radius;
+        const rr = rrOf(r);
         for (let s = 0; s < S; s++) {
             const i = idx(r, s);
             const a = (s / S) * Math.PI * 2;
@@ -224,8 +259,16 @@ function buildMembrane() {
     }
     pos.set(home); prev.set(home);
     for (let i = 0; i < count; i++) {
-        const rr = (ringOf[i] / R) * radius;
-        const share = i === 0 ? Math.PI * dr * dr * 0.25 : 2 * Math.PI * rr * dr / S;
+        const r = ringOf[i];
+        let share;
+        if (r === 0) {
+            const rOut = rrOf(1) / 2;
+            share = Math.PI * rOut * rOut;
+        } else {
+            const rIn = (rrOf(r - 1) + rrOf(r)) / 2;
+            const rOut = r < R ? (rrOf(r) + rrOf(r + 1)) / 2 : rrOf(R);
+            share = Math.PI * (rOut * rOut - rIn * rIn) / S;
+        }
         geoInvMass[i] = Math.min(6, Math.max(0.5, shareRef / share));
     }
 
@@ -245,18 +288,26 @@ function buildMembrane() {
     };
     const addC = (a, b, gw) => {
         const ci = constraints.length;
-        constraints.push({ a, b, rest: restOf(a, b), broken: false, bend: false, h0: -1, h1: -1,
+        const rest = restOf(a, b);
+        constraints.push({ a, b, rest, broken: false, bend: false, h0: -1, h1: -1,
                            spoke: a === 0 || b === 0, tearBase: 1, tearScale: 1, k: 0,
+                           // Tear gauge: strain for tearing is measured over at
+                           // least a fraction of the uniform-grid spacing, so
+                           // the tiny links of the densified center don't snap
+                           // from microscopic absolute displacements.
+                           gauge: Math.max(rest, dr * 0.6),
                            gw: Math.min(4, Math.max(0.1, gw)) });
         conAt.set(pairKey(a, b), ci);
         vertexCons[a].push(ci);
         vertexCons[b].push(ci);
     };
     // Cross-section per link type (normalized to a mid-disc radial link):
-    // radial ∝ arc width at its mid radius, circumferential ∝ dr per arc
-    // length, diagonals get the geometric mean with a shear discount.
-    const gwRad = (r) => (2 * Math.PI * ((r + 0.5) / R) * radius / S) / dr / gwRef;
-    const gwCirc = (r) => (dr / (2 * Math.PI * (r / R) * radius / S)) / gwRef;
+    // radial ∝ arc width at its mid radius per local ring spacing,
+    // circumferential ∝ owned radial extent per arc length, diagonals get the
+    // geometric mean with a shear discount. All use the true power-law radii.
+    const gwRad = (r) => ((2 * Math.PI * rrOf(r + 0.5) / S) / Math.max(1e-6, rrOf(r + 1) - rrOf(r))) / gwRef;
+    const gwCirc = (r) => (((rrOf(Math.min(R, r + 1)) - rrOf(Math.max(0, r - 1))) / 2)
+        / (2 * Math.PI * rrOf(r) / S)) / gwRef;
     for (let s = 0; s < S; s++) addC(0, idx(1, s), gwRad(0));           // center spokes
     for (let r = 1; r <= R; r++) {
         for (let s = 0; s < S; s++) {
@@ -345,6 +396,7 @@ function buildMembrane() {
 
     mem = { R, S, count, home, pos, prev, ringOf, pinned, constraints, structCount, vertexCons,
             jitInvMass, geoInvMass, dampJit, stiffJit, wArr, brokenTouch, brokenCount: 0, spokesBroken: 0,
+            stick, stickBan, stickDir, stickCount: 0,
             needIndexRebuild: false, tearRng: mulberry32(1),
             tris, geometry, mesh, material, depths, indexArr };
     buildJitter();
@@ -405,7 +457,7 @@ function applyBallLook() {
 // closest point lies inside that radius, and a max-penetration readout.
 // With the face–sphere collision pass active the readout should stay at ~0.
 // ----------------------------------------------------------------------------
-const debugState = { maxPenetration: 0 };
+const debugState = { maxPenetration: 0, stuckVertices: 0 };
 const debugSphere = new THREE.Mesh(
     new THREE.SphereGeometry(1, 24, 16),
     new THREE.MeshBasicMaterial({ color: '#ff3355', wireframe: true, depthTest: false, transparent: true, opacity: 0.8 }));
@@ -413,12 +465,18 @@ debugSphere.renderOrder = 2;
 debugSphere.visible = false;
 tiltGroup.add(debugSphere);
 let debugFaceMesh = null;
+let debugStickPoints = null;
 
 function rebuildDebugOverlay() {
     if (debugFaceMesh) {
         tiltGroup.remove(debugFaceMesh);
         debugFaceMesh.geometry.dispose();
         debugFaceMesh.material.dispose();
+    }
+    if (debugStickPoints) {
+        tiltGroup.remove(debugStickPoints);
+        debugStickPoints.geometry.dispose();
+        debugStickPoints.material.dispose();
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', mem.geometry.attributes.position); // shared, live
@@ -430,6 +488,18 @@ function rebuildDebugOverlay() {
     debugFaceMesh.visible = false;
     debugFaceMesh.frustumCulled = false;
     tiltGroup.add(debugFaceMesh);
+    // Sticky-contact markers: yellow points on every vertex currently latched
+    // onto the sphere — the patch is visible growing and (at rupture) popping.
+    const pg = new THREE.BufferGeometry();
+    pg.setAttribute('position', mem.geometry.attributes.position); // shared, live
+    pg.setIndex(new THREE.BufferAttribute(new Uint32Array(mem.count), 1));
+    pg.setDrawRange(0, 0);
+    debugStickPoints = new THREE.Points(pg, new THREE.PointsMaterial({
+        color: '#ffd23e', size: 5, sizeAttenuation: false, depthTest: false, transparent: true, opacity: 0.9 }));
+    debugStickPoints.renderOrder = 4;
+    debugStickPoints.visible = false;
+    debugStickPoints.frustumCulled = false;
+    tiltGroup.add(debugStickPoints);
 }
 
 // Per-frame diagnostic: closest point of every intact face vs the visible
@@ -438,7 +508,8 @@ function updateContactDebug() {
     const on = CONFIG.debug.showContact && ballEngaged && phase === Phase.APPROACH;
     debugSphere.visible = on;
     if (debugFaceMesh) debugFaceMesh.visible = on;
-    if (!on) { debugState.maxPenetration = 0; return; }
+    if (debugStickPoints) debugStickPoints.visible = on;
+    if (!on) { debugState.maxPenetration = 0; debugState.stuckVertices = 0; return; }
     debugSphere.position.copy(ballPos);
     debugSphere.scale.setScalar(CONFIG.ball.radius);
     const { pos, tris, constraints } = mem;
@@ -467,6 +538,13 @@ function updateContactDebug() {
     debugState.maxPenetration = maxPen;
     debugFaceMesh.geometry.setDrawRange(0, n);
     debugFaceMesh.geometry.index.needsUpdate = true;
+    // Sticky patch markers
+    const sIdx = debugStickPoints.geometry.index.array;
+    let sn = 0;
+    for (let i = 0; i < mem.count; i++) if (mem.stick[i]) sIdx[sn++] = i;
+    debugState.stuckVertices = sn;
+    debugStickPoints.geometry.setDrawRange(0, sn);
+    debugStickPoints.geometry.index.needsUpdate = true;
 }
 
 // ----------------------------------------------------------------------------
@@ -496,6 +574,7 @@ function restartCycle() {
     mem.brokenTouch.fill(0);
     mem.brokenCount = 0;
     mem.spokesBroken = 0;
+    clearSticky();
     rebuildIndex();
     ballMesh.visible = false;
     ballEngaged = false;
@@ -687,8 +766,10 @@ function physicsStep(dt) {
     }
 
     // Ball motion + contact. The film both collides with and adheres to the
-    // sphere (`grip`): the contact zone wraps the leading hemisphere, so the
-    // ball first sinks into a dimple; free tension arcs start past its edge.
+    // sphere: vertices entering the adhesion zone latch onto a fixed spot on
+    // its surface (sticky contact) and ride along until the tension exceeds
+    // `adhesionStrength` — the film clings, follows the sphere's shape, and
+    // free tension arcs start past the shrinking edge of the contact patch.
     if (ballEngaged) {
         const step = CONFIG.ball.speed * dt;
         ballPos.y -= step;
@@ -704,10 +785,33 @@ function physicsStep(dt) {
                 pos[2] = prev[2] = ballPos.z;
                 wArr[0] = 0;
             }
+            const { stick, stickBan, stickDir } = mem;
             const grip = mat.grip;
+            const sticky = mat.adhesionStrength > 0 && mat.adhesionZone > 0;
+            const rAtt2 = r * r * 1.05 * 1.05; // latch-on proximity (film sits on the surface)
+            const zoneCos = Math.cos(Math.min(1, Math.max(0, mat.adhesionZone)) * Math.PI * 0.5);
+            const detach2 = mat.adhesionStrength * mat.adhesionStrength;
             for (let i = 1; i < count; i++) {
                 if (pinned[i]) continue;
                 const j = i * 3;
+                if (sticky && stick[i]) {
+                    // Detach test before re-projection: the drift accumulated
+                    // since last step is the net pull of the springs against
+                    // the adhesion. Past the threshold the contact lets go.
+                    const tx = ballPos.x + stickDir[j] * r;
+                    const ty = ballPos.y + stickDir[j + 1] * r;
+                    const tz = ballPos.z + stickDir[j + 2] * r;
+                    const ex = pos[j] - tx, ey = pos[j + 1] - ty, ez = pos[j + 2] - tz;
+                    if (ex * ex + ey * ey + ez * ez > detach2) {
+                        stick[i] = 0; stickBan[i] = 1; mem.stickCount--;
+                    } else {
+                        // Snap to the spot and co-move with the ball (Verlet
+                        // velocity = ball velocity) — true adhesion, not drag.
+                        pos[j] = tx; pos[j + 1] = ty; pos[j + 2] = tz;
+                        prev[j] = tx; prev[j + 1] = ty + step; prev[j + 2] = tz;
+                        continue;
+                    }
+                }
                 const dx = pos[j] - ballPos.x;
                 const dy = pos[j + 1] - ballPos.y;
                 const dz = pos[j + 2] - ballPos.z;
@@ -719,12 +823,21 @@ function physicsStep(dt) {
                     pos[j + 1] = ballPos.y + dy * k;
                     pos[j + 2] = ballPos.z + dz * k;
                     if (grip > 0) {
-                        // Adhesion, strongest at the leading pole: blend the
-                        // vertex velocity toward co-moving with the ball.
-                        const stick = grip * Math.max(0, -dy / d);
-                        prev[j] += (pos[j] - prev[j]) * stick;
-                        prev[j + 1] += (pos[j + 1] + step - prev[j + 1]) * stick;
-                        prev[j + 2] += (pos[j + 2] - prev[j + 2]) * stick;
+                        // Tangential drag, strongest at the leading pole:
+                        // blend the vertex velocity toward co-moving.
+                        const stickV = grip * Math.max(0, -dy / d);
+                        prev[j] += (pos[j] - prev[j]) * stickV;
+                        prev[j + 1] += (pos[j + 1] + step - prev[j + 1]) * stickV;
+                        prev[j + 2] += (pos[j + 2] - prev[j + 2]) * stickV;
+                    }
+                }
+                // Latch on: close to the surface, inside the adhesion zone
+                // (a cap around the leading pole), not banned this cycle.
+                if (sticky && !stick[i] && !stickBan[i] && d2 < rAtt2 && d2 > 1e-12) {
+                    const d = Math.sqrt(d2);
+                    if (-dy / d >= zoneCos) {
+                        stick[i] = 1; mem.stickCount++;
+                        stickDir[j] = dx / d; stickDir[j + 1] = dy / d; stickDir[j + 2] = dz / d;
                     }
                 }
             }
@@ -733,12 +846,15 @@ function physicsStep(dt) {
 
     // Cache per-link stiffness from current strain (once per step): near the
     // ball the film is strained and stiff, near the rim slack and compliant →
-    // the profile bows in arcs instead of a straight cone.
+    // the profile bows in arcs instead of a straight cone. Bend links whose
+    // ends are stuck to the ball relax so the film can take its curvature.
+    const stickArr = mem.stick;
     for (let ci = 0; ci < constraints.length; ci++) {
         const c = constraints[ci];
         if (c.bend) {
             c.k = (constraints[c.h0].broken || constraints[c.h1].broken)
                 ? 0 : Math.min(1, mat.bendStiffness * c.gw) * 0.5 * (stiffJit[c.a] + stiffJit[c.b]);
+            if (c.k > 0 && (stickArr[c.a] || stickArr[c.b])) c.k = 0;
             continue;
         }
         if (c.broken) { c.k = 0; continue; }
@@ -782,9 +898,22 @@ function physicsStep(dt) {
             pos[jb] -= ox * wb; pos[jb + 1] -= oy * wb; pos[jb + 2] -= oz * wb;
         }
         if (ballContact) {
+            const { stick, stickDir } = mem;
             for (let i = 1; i < count; i++) {
                 if (pinned[i]) continue;
                 const j = i * 3;
+                if (stick[i]) {
+                    // Bilateral sticky projection: pull the vertex toward its
+                    // spot on the sphere from either side (partial, so the
+                    // residual reflects tension for the detach test).
+                    const tx = ballPos.x + stickDir[j] * ballR;
+                    const ty = ballPos.y + stickDir[j + 1] * ballR;
+                    const tz = ballPos.z + stickDir[j + 2] * ballR;
+                    pos[j] += (tx - pos[j]) * 0.5;
+                    pos[j + 1] += (ty - pos[j + 1]) * 0.5;
+                    pos[j + 2] += (tz - pos[j + 2]) * 0.5;
+                    continue;
+                }
                 const dx = pos[j] - ballPos.x;
                 const dy = pos[j + 1] - ballPos.y;
                 const dz = pos[j + 2] - ballPos.z;
@@ -808,7 +937,9 @@ function physicsStep(dt) {
 
     // Tearing: a link snaps when its strain exceeds the material threshold
     // (jittered per link, weakened by cascade). Where and when it tears is a
-    // property of the material, not a scripted depth.
+    // property of the material, not a scripted depth. Strain for tearing is
+    // measured over the gauge length (≥ a fraction of the uniform spacing) so
+    // the fine center links need a comparable absolute stretch to snap.
     if (phase === Phase.APPROACH || phase === Phase.PIERCED) {
         const tearAt = mat.tearStrain;
         for (let ci = 0; ci < structCount; ci++) {
@@ -818,7 +949,7 @@ function physicsStep(dt) {
             const dx = pos[jb] - pos[ja];
             const dy = pos[jb + 1] - pos[ja + 1];
             const dz = pos[jb + 2] - pos[ja + 2];
-            const strain = (Math.hypot(dx, dy, dz) - c.rest) / c.rest;
+            const strain = (Math.hypot(dx, dy, dz) - c.rest) / c.gauge;
             if (strain > tearAt * c.tearScale) snapConstraint(ci, strain, dt);
         }
     }
@@ -855,6 +986,11 @@ function snapConstraint(ci, strain, dt) {
     mem.brokenCount++;
     mem.needIndexRebuild = true;
 
+    // Avalanche: the first snap inside the contact patch pops every sticky
+    // contact at once — the film bursts and flies off the sphere in one beat
+    // instead of peeling away gradually.
+    if (mem.stickCount > 0 && (mem.stick[c.a] || mem.stick[c.b])) releaseSticky(dt);
+
     // Cascade: a snap overloads the neighbours — their thresholds drop.
     for (const ni of vertexCons[c.a]) {
         const n = constraints[ni];
@@ -875,6 +1011,37 @@ function snapConstraint(ci, strain, dt) {
     const mag = mat.recoil * Math.max(0, strain);
     kick(c.a, -dx / d, -dy / d, -dz / d, mag, dt);
     kick(c.b, dx / d, dy / d, dz / d, mag, dt);
+}
+
+// Drop all sticky state without impulses (cycle reset / new drop).
+function clearSticky() {
+    mem.stick.fill(0);
+    mem.stickBan.fill(0);
+    mem.stickCount = 0;
+}
+
+// Avalanche release: every stuck vertex lets go at once. The stored adhesion
+// energy pops the film off the sphere (impulse along the outward normal) and
+// links around the patch weaken further — the burst is short and snappy.
+function releaseSticky(dt) {
+    const { stick, stickBan, stickDir, stickCount, constraints, vertexCons } = mem;
+    if (stickCount <= 0) return;
+    const mat = CONFIG.material;
+    const pop = mat.recoil * (0.4 + 4 * mat.adhesionStrength);
+    for (let i = 0; i < mem.count; i++) {
+        if (!stick[i]) continue;
+        stick[i] = 0;
+        stickBan[i] = 1;
+        const j = i * 3;
+        kick(i, stickDir[j], stickDir[j + 1], stickDir[j + 2], pop, dt);
+        // Stress concentration at the patch edge: links that were glued to
+        // the sphere carry the burst — lower their thresholds locally.
+        for (const ni of vertexCons[i]) {
+            const n = constraints[ni];
+            if (!n.broken) n.tearScale = Math.max(0.3, n.tearScale * 0.75);
+        }
+    }
+    mem.stickCount = 0;
 }
 
 // Add an impulse (velocity change) to a vertex, with seeded magnitude noise
@@ -962,9 +1129,11 @@ function tick(now) {
         if (phase === Phase.APPROACH) {
             // Punch-through: enough of the center has let go — the point passes.
             if (mem.spokesBroken >= mem.S * 0.5 || mem.brokenCount >= mem.S * 2) {
+                releaseSticky(FIXED_DT); // any leftover glue pops with the burst
                 ballStuck = false;
                 setPhase(Phase.PIERCED);
             } else if (-mem.pos[1] >= CONFIG.rupture.maxDepth) {
+                releaseSticky(FIXED_DT);
                 forceTear(FIXED_DT); // failsafe for materials too tough to tear
                 ballStuck = false;
                 setPhase(Phase.PIERCED);
@@ -980,6 +1149,7 @@ function tick(now) {
         const ang = cycleRng() * Math.PI * 2;
         const off = CONFIG.imperfection.entryOffset * (0.25 + 0.75 * cycleRng());
         ballPos.set(Math.cos(ang) * off, CONFIG.ball.startHeight, Math.sin(ang) * off);
+        clearSticky();           // fresh drop: no leftover latches or bans
         ballEngaged = true;      // physics runs and the sphere is drawn as it falls
         ballMesh.visible = true;  // the film now wraps it, so it stays visible from any angle
         cycleIndex++;
@@ -1026,6 +1196,7 @@ const PARAM_SCHEMA = [
         { key: 'radius', min: 0.5, max: 4, step: 0.05, rebuild: true },
         { key: 'rings', min: 6, max: 60, step: 1, rebuild: true },
         { key: 'segments', min: 12, max: 128, step: 1, rebuild: true },
+        { key: 'centerDensity', min: 1, max: 4, step: 0.05, rebuild: true },
         { key: 'iterations', min: 1, max: 20, step: 1 },
         { key: 'damping', min: 0.9, max: 1, step: 0.001 },
         { key: 'gravity', min: 0, max: 5, step: 0.05 },
@@ -1041,6 +1212,8 @@ const PARAM_SCHEMA = [
         { key: 'damping', min: 0.95, max: 1, step: 0.0005 },
         { key: 'massScale', min: 0.3, max: 3, step: 0.05 },
         { key: 'grip', min: 0, max: 1, step: 0.01 },
+        { key: 'adhesionStrength', min: 0, max: 0.2, step: 0.002 },
+        { key: 'adhesionZone', min: 0, max: 1, step: 0.01 },
         { key: 'tearStrain', min: 0.1, max: 9, step: 0.05 },
         { key: 'tearCascade', min: 0.3, max: 1, step: 0.01 },
         { key: 'recoil', min: 0, max: 2, step: 0.01 },
@@ -1131,7 +1304,8 @@ function buildGUI() {
 
     // Runs the apply hooks after a batch change (randomize / paste): rebuild
     // once if any structural parameter changed, then refresh everything else.
-    const structSnapshot = () => [CONFIG.membrane.radius, CONFIG.membrane.rings, CONFIG.membrane.segments].join('|');
+    const structSnapshot = () => [CONFIG.membrane.radius, CONFIG.membrane.rings,
+        CONFIG.membrane.segments, CONFIG.membrane.centerDensity].join('|');
     function applyBatch(before) {
         if (structSnapshot() !== before) restartAll(); // buildMembrane re-seeds jitter too
         else buildJitter();
@@ -1263,6 +1437,7 @@ function buildGUI() {
     const dbg = gui.addFolder('debug');
     dbg.add(CONFIG.debug, 'showContact').name('show contact');
     dbg.add(debugState, 'maxPenetration').name('max face penetration').listen().disable();
+    dbg.add(debugState, 'stuckVertices').name('stuck vertices').listen().disable();
     dbg.close();
 
     gui.add({ 'randomize all': () => randomizeSections(PARAM_SCHEMA) }, 'randomize all');
