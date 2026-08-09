@@ -442,6 +442,23 @@ function stiffnessAt(strain, mat) {
     return mat.baseStiffness + (mat.maxStiffness - mat.baseStiffness) * Math.pow(t, mat.stiffenPower);
 }
 
+// Effective ball collision radius: visual radius + a sagitta margin derived
+// from the local mesh spacing. Vertices lying exactly on the sphere leave the
+// flat triangles between them (chords) cutting inside the ball, so the sphere
+// pokes through the intact film at contact. Colliding at radius + sagitta
+// keeps every chord outside the visible sphere: the membrane stretches around
+// the ball until it tears, with the ball never showing through.
+function ballCollisionRadius() {
+    const r = CONFIG.ball.radius;
+    const R = Math.max(3, Math.round(CONFIG.membrane.rings));
+    const S = Math.max(8, Math.round(CONFIG.membrane.segments));
+    const dr = CONFIG.membrane.radius / R;
+    const contactRho = Math.min(CONFIG.membrane.radius, r + 2 * dr);
+    const chord = Math.hypot(dr, 2 * Math.PI * contactRho / S); // max cell diagonal in contact zone
+    const sagitta = (chord * chord) / (8 * Math.max(1e-4, r));
+    return r + Math.min(r, Math.max(0.02 * r, 1.25 * sagitta));
+}
+
 function homeDist2(i) {
     const j = i * 3;
     const dx = mem.pos[j] - mem.home[j];
@@ -505,7 +522,7 @@ function physicsStep(dt) {
         const step = CONFIG.ball.speed * dt;
         ballPos.y -= step;
         if (phase === Phase.APPROACH) {
-            const r = CONFIG.ball.radius * 1.05;
+            const r = ballCollisionRadius();
             const r2 = r * r;
             // Once the point reaches the center vertex, that contact holds
             // (the point presses the film in front of it) until punch-through.
@@ -571,7 +588,7 @@ function physicsStep(dt) {
     // through the intact film.
     const iters = Math.max(1, Math.round(CONFIG.membrane.iterations));
     const ballContact = ballEngaged && phase === Phase.APPROACH;
-    const ballR = CONFIG.ball.radius * 1.05;
+    const ballR = ballCollisionRadius();
     const ballR2 = ballR * ballR;
     for (let it = 0; it < iters; it++) {
         for (const c of constraints) {
@@ -811,110 +828,294 @@ function tick(now) {
 
 // ----------------------------------------------------------------------------
 // GUI (press H to toggle)
+// Schema-driven: every tunable is declared once with its range and apply hook.
+// The same schema powers the controllers, per-section/global randomization,
+// randomize-locks and config copy/paste.
 // ----------------------------------------------------------------------------
-function buildGUI() {
-    const gui = new GUI({ title: 'membrane' });
+const PARAM_SCHEMA = [
+    { id: 'scene', title: 'scene / camera', obj: () => CONFIG.scene, params: [
+        { key: 'cameraFov', min: 15, max: 90, step: 1, apply: applyCamera },
+        { key: 'cameraDistance', min: 2, max: 20, step: 0.1, apply: applyCamera },
+        { key: 'cameraHeight', min: -5, max: 5, step: 0.05, apply: applyCamera },
+        { key: 'lookAtY', min: -4, max: 4, step: 0.05, apply: applyCamera },
+        { key: 'membraneTilt', min: -80, max: 80, step: 1, apply: applyTilt },
+        { key: 'background', color: true, apply: applyCamera },
+    ] },
+    { id: 'membrane', title: 'membrane mesh / solver', obj: () => CONFIG.membrane, params: [
+        { key: 'radius', min: 0.5, max: 4, step: 0.05, rebuild: true },
+        { key: 'rings', min: 6, max: 60, step: 1, rebuild: true },
+        { key: 'segments', min: 12, max: 128, step: 1, rebuild: true },
+        { key: 'iterations', min: 1, max: 20, step: 1 },
+        { key: 'damping', min: 0.9, max: 1, step: 0.001 },
+        { key: 'gravity', min: 0, max: 5, step: 0.05 },
+    ] },
+    { id: 'material', title: 'material', obj: () => CONFIG.material, markCustom: true, params: [
+        { key: 'baseStiffness', min: 0.005, max: 1, step: 0.005 },
+        { key: 'stiffenStart', min: 0, max: 1, step: 0.01 },
+        { key: 'stiffenSpan', min: 0.05, max: 2, step: 0.01 },
+        { key: 'stiffenPower', min: 0.5, max: 4, step: 0.05 },
+        { key: 'maxStiffness', min: 0.05, max: 1, step: 0.01 },
+        { key: 'compressResist', min: 0, max: 1, step: 0.01 },
+        { key: 'bendStiffness', min: 0, max: 0.5, step: 0.005 },
+        { key: 'damping', min: 0.95, max: 1, step: 0.0005 },
+        { key: 'massScale', min: 0.3, max: 3, step: 0.05 },
+        { key: 'grip', min: 0, max: 1, step: 0.01 },
+        { key: 'tearStrain', min: 0.1, max: 9, step: 0.05 },
+        { key: 'tearCascade', min: 0.3, max: 1, step: 0.01 },
+        { key: 'recoil', min: 0, max: 2, step: 0.01 },
+        { key: 'healSpring', min: 1, max: 60, step: 0.5 },
+        { key: 'healSnap', min: 0.02, max: 0.4, step: 0.005 },
+    ] },
+    { id: 'ball', title: 'ball', obj: () => CONFIG.ball, params: [
+        { key: 'radius', min: 0.02, max: 0.5, step: 0.01, apply: applyBallLook },
+        { key: 'startHeight', min: 0.5, max: 8, step: 0.1 },
+        { key: 'speed', min: 0.05, max: 3, step: 0.01 },
+        { key: 'exitDistance', min: 1, max: 10, step: 0.1 },
+        { key: 'color', color: true, apply: applyBallLook },
+    ] },
+    { id: 'rupture', title: 'rupture / healing', obj: () => CONFIG.rupture, params: [
+        { key: 'maxDepth', min: 0.5, max: 4, step: 0.05 },
+        { key: 'healDelay', min: 0, max: 5, step: 0.1 },
+        { key: 'healDuration', min: 0.5, max: 10, step: 0.1 },
+    ] },
+    { id: 'oscillation', title: 'oscillation', obj: () => CONFIG.oscillation, params: [
+        { key: 'damping', min: 0.85, max: 1, step: 0.0005 },
+        { key: 'settleTime', min: 0, max: 10, step: 0.1 },
+    ] },
+    { id: 'imperfection', title: 'imperfection', obj: () => CONFIG.imperfection, params: [
+        { key: 'seed', min: 1, max: 9999, step: 1, applyFinish: buildJitter },
+        { key: 'massJitter', min: 0, max: 0.3, step: 0.005, applyFinish: buildJitter },
+        { key: 'stiffnessJitter', min: 0, max: 0.3, step: 0.005, applyFinish: buildJitter },
+        { key: 'dampingJitter', min: 0, max: 0.5, step: 0.01, applyFinish: buildJitter },
+        { key: 'tearJitter', min: 0, max: 0.5, step: 0.01, applyFinish: buildJitter },
+        { key: 'entryOffset', min: 0, max: 0.4, step: 0.005 },
+        { key: 'recoilNoise', min: 0, max: 1, step: 0.01 },
+    ] },
+    { id: 'look', title: 'look', obj: () => CONFIG.look, params: [
+        { key: 'baseColor', color: true },
+        { key: 'darkenDepth', min: 0.2, max: 4, step: 0.05 },
+        { key: 'darkenPower', min: 0.3, max: 4, step: 0.05 },
+        { key: 'darkenStrength', min: 0, max: 1, step: 0.01 },
+        { key: 'brightness', min: 0.2, max: 2, step: 0.01 },
+    ] },
+    { id: 'timing', title: 'timing', obj: () => CONFIG.timing, params: [
+        { key: 'timeScale', min: 0.05, max: 3, step: 0.05 },
+        { key: 'restPause', min: 0, max: 5, step: 0.1 },
+    ] },
+];
 
-    const fScene = gui.addFolder('scene / camera');
-    fScene.add(CONFIG.scene, 'cameraFov', 15, 90, 1).onChange(applyCamera);
-    fScene.add(CONFIG.scene, 'cameraDistance', 2, 20, 0.1).onChange(applyCamera);
-    fScene.add(CONFIG.scene, 'cameraHeight', -5, 5, 0.05).onChange(applyCamera);
-    fScene.add(CONFIG.scene, 'lookAtY', -4, 4, 0.05).onChange(applyCamera);
-    fScene.add(CONFIG.scene, 'membraneTilt', -80, 80, 1).onChange(applyTilt);
-    fScene.addColor(CONFIG.scene, 'background').onChange(applyCamera);
-    fScene.close();
-
-    const fMem = gui.addFolder('membrane');
-    fMem.add(CONFIG.membrane, 'radius', 0.5, 4, 0.05).onFinishChange(restartAll);
-    fMem.add(CONFIG.membrane, 'rings', 6, 60, 1).onFinishChange(restartAll);
-    fMem.add(CONFIG.membrane, 'segments', 12, 128, 1).onFinishChange(restartAll);
-    fMem.add(CONFIG.membrane, 'iterations', 1, 20, 1);
-    fMem.add(CONFIG.membrane, 'damping', 0.9, 1, 0.001);
-    fMem.add(CONFIG.membrane, 'gravity', 0, 5, 0.05);
-    fMem.close();
-
-    // Material: pick a preset, then experiment — touching any slider makes it
-    // "custom". Presets are starting points, not fixed math.
-    const fMat = gui.addFolder('material');
-    const matCtrls = [];
-    const presetCtrl = fMat.add(CONFIG, 'materialPreset', [...Object.keys(MATERIALS), 'custom'])
-        .name('preset')
-        .onChange((name) => {
-            const p = MATERIALS[name];
-            if (!p) return;
-            Object.assign(CONFIG.material, p);
-            matCtrls.forEach((ctrl) => ctrl.updateDisplay());
-        });
-    const addMat = (prop, lo, hi, st) => {
-        matCtrls.push(fMat.add(CONFIG.material, prop, lo, hi, st).onChange(() => {
-            CONFIG.materialPreset = 'custom';
-            presetCtrl.updateDisplay();
-        }));
+// Randomize-locks. A lock only excludes a parameter (or a whole section) from
+// randomization and config paste — manual editing always stays available.
+const randLocks = new Set();
+const lockButtons = new Map(); // lock key → toggle element
+function isLocked(secId, key) {
+    return randLocks.has(secId) || (key !== undefined && randLocks.has(`${secId}.${key}`));
+}
+function makeLockToggle(lockKey, what) {
+    const el = document.createElement('span');
+    el.className = 'rand-lock';
+    const sync = () => {
+        const locked = randLocks.has(lockKey);
+        el.textContent = locked ? '\u{1F512}' : '\u{1F3B2}';
+        el.classList.toggle('locked', locked);
+        el.title = locked
+            ? `${what} is LOCKED: excluded from randomize / paste (click to include)`
+            : `${what} is randomizable (click to lock: exclude from randomize / paste)`;
     };
-    addMat('baseStiffness', 0.005, 1, 0.005);
-    addMat('stiffenStart', 0, 1, 0.01);
-    addMat('stiffenSpan', 0.05, 2, 0.01);
-    addMat('stiffenPower', 0.5, 4, 0.05);
-    addMat('maxStiffness', 0.05, 1, 0.01);
-    addMat('compressResist', 0, 1, 0.01);
-    addMat('bendStiffness', 0, 0.5, 0.005);
-    addMat('damping', 0.95, 1, 0.0005);
-    addMat('massScale', 0.3, 3, 0.05);
-    addMat('grip', 0, 1, 0.01);
-    addMat('tearStrain', 0.1, 9, 0.05);
-    addMat('tearCascade', 0.3, 1, 0.01);
-    addMat('recoil', 0, 2, 0.01);
-    addMat('healSpring', 1, 60, 0.5);
-    addMat('healSnap', 0.02, 0.4, 0.005);
+    el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (randLocks.has(lockKey)) randLocks.delete(lockKey); else randLocks.add(lockKey);
+        sync();
+    });
+    sync();
+    lockButtons.set(lockKey, { el, sync });
+    return el;
+}
+function syncLockButtons() { for (const { sync } of lockButtons.values()) sync(); }
 
-    const fBall = gui.addFolder('ball');
-    fBall.add(CONFIG.ball, 'radius', 0.02, 0.5, 0.01).onChange(applyBallLook);
-    fBall.add(CONFIG.ball, 'startHeight', 0.5, 8, 0.1);
-    fBall.add(CONFIG.ball, 'speed', 0.05, 3, 0.01);
-    fBall.add(CONFIG.ball, 'exitDistance', 1, 10, 0.1);
-    fBall.addColor(CONFIG.ball, 'color').onChange(applyBallLook);
-    fBall.close();
+function randomValueFor(p) {
+    if (p.color) {
+        const c = new THREE.Color().setHSL(Math.random(), 0.4 + 0.6 * Math.random(), 0.25 + 0.5 * Math.random());
+        return `#${c.getHexString()}`;
+    }
+    let v = p.min + Math.random() * (p.max - p.min);
+    if (p.step) v = p.min + Math.round((v - p.min) / p.step) * p.step;
+    return Math.min(p.max, Math.max(p.min, v));
+}
 
-    const fRup = gui.addFolder('rupture / healing');
-    fRup.add(CONFIG.rupture, 'maxDepth', 0.5, 4, 0.05);
-    fRup.add(CONFIG.rupture, 'healDelay', 0, 5, 0.1);
-    fRup.add(CONFIG.rupture, 'healDuration', 0.5, 10, 0.1);
-    fRup.close();
+function buildGUI() {
+    const gui = new GUI({ title: 'membrane lab' });
+    injectGuiStyles();
+    let presetCtrl = null;
 
-    const fOsc = gui.addFolder('oscillation');
-    fOsc.add(CONFIG.oscillation, 'damping', 0.85, 1, 0.0005);
-    fOsc.add(CONFIG.oscillation, 'settleTime', 0, 10, 0.1);
-    fOsc.close();
+    // Runs the apply hooks after a batch change (randomize / paste): rebuild
+    // once if any structural parameter changed, then refresh everything else.
+    const structSnapshot = () => [CONFIG.membrane.radius, CONFIG.membrane.rings, CONFIG.membrane.segments].join('|');
+    function applyBatch(before) {
+        if (structSnapshot() !== before) restartAll(); // buildMembrane re-seeds jitter too
+        else buildJitter();
+        applyCamera(); applyTilt(); applyBallLook();
+        gui.controllersRecursive().forEach((c) => c.updateDisplay());
+        syncLockButtons();
+    }
 
-    const fImp = gui.addFolder('imperfection');
-    fImp.add(CONFIG.imperfection, 'seed', 1, 9999, 1).onFinishChange(buildJitter);
-    fImp.add(CONFIG.imperfection, 'massJitter', 0, 0.3, 0.005).onFinishChange(buildJitter);
-    fImp.add(CONFIG.imperfection, 'stiffnessJitter', 0, 0.3, 0.005).onFinishChange(buildJitter);
-    fImp.add(CONFIG.imperfection, 'dampingJitter', 0, 0.5, 0.01).onFinishChange(buildJitter);
-    fImp.add(CONFIG.imperfection, 'tearJitter', 0, 0.5, 0.01).onFinishChange(buildJitter);
-    fImp.add(CONFIG.imperfection, 'entryOffset', 0, 0.4, 0.005);
-    fImp.add(CONFIG.imperfection, 'recoilNoise', 0, 1, 0.01);
-    fImp.close();
+    function randomizeSections(sections) {
+        const before = structSnapshot();
+        for (const sec of sections) {
+            if (randLocks.has(sec.id)) continue;
+            let touched = false;
+            for (const p of sec.params) {
+                if (isLocked(sec.id, p.key)) continue;
+                sec.obj()[p.key] = randomValueFor(p);
+                touched = true;
+            }
+            if (sec.markCustom && touched) CONFIG.materialPreset = 'custom';
+        }
+        applyBatch(before);
+    }
 
-    const fLook = gui.addFolder('look');
-    fLook.addColor(CONFIG.look, 'baseColor');
-    fLook.add(CONFIG.look, 'darkenDepth', 0.2, 4, 0.05);
-    fLook.add(CONFIG.look, 'darkenPower', 0.3, 4, 0.05);
-    fLook.add(CONFIG.look, 'darkenStrength', 0, 1, 0.01);
-    fLook.add(CONFIG.look, 'brightness', 0.2, 2, 0.01);
-    fLook.close();
+    function serializeConfig() {
+        const out = { materialPreset: CONFIG.materialPreset, locks: [...randLocks].sort() };
+        for (const sec of PARAM_SCHEMA) {
+            out[sec.id] = {};
+            for (const p of sec.params) out[sec.id][p.key] = sec.obj()[p.key];
+        }
+        return JSON.stringify(out, null, 2);
+    }
 
-    const fTime = gui.addFolder('timing');
-    fTime.add(CONFIG.timing, 'timeScale', 0.05, 3, 0.05);
-    fTime.add(CONFIG.timing, 'restPause', 0, 5, 0.1);
-    fTime.close();
+    // Applies a parsed config: unknown keys are ignored, numbers are clamped
+    // to their GUI ranges, and currently locked parameters are left untouched.
+    function applyConfigData(data) {
+        if (!data || typeof data !== 'object') return;
+        const before = structSnapshot();
+        for (const sec of PARAM_SCHEMA) {
+            const src = data[sec.id];
+            if (!src || typeof src !== 'object' || randLocks.has(sec.id)) continue;
+            for (const p of sec.params) {
+                if (isLocked(sec.id, p.key) || !(p.key in src)) continue;
+                const v = src[p.key];
+                if (p.color) {
+                    if (typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v)) sec.obj()[p.key] = v;
+                } else if (typeof v === 'number' && Number.isFinite(v)) {
+                    sec.obj()[p.key] = Math.min(p.max, Math.max(p.min, v));
+                }
+            }
+        }
+        if (typeof data.materialPreset === 'string'
+            && (data.materialPreset === 'custom' || MATERIALS[data.materialPreset])) {
+            CONFIG.materialPreset = data.materialPreset;
+        }
+        if (Array.isArray(data.locks)) {
+            randLocks.clear();
+            for (const k of data.locks) if (typeof k === 'string') randLocks.add(k);
+        }
+        applyBatch(before);
+    }
 
+    async function copyConfig() {
+        const json = serializeConfig();
+        try {
+            await navigator.clipboard.writeText(json);
+        } catch {
+            window.prompt('Copy the configuration below:', json);
+        }
+    }
+
+    async function pasteConfig() {
+        let text = null;
+        try { text = await navigator.clipboard.readText(); } catch { /* blocked → prompt */ }
+        if (!text) text = window.prompt('Paste configuration JSON:', '');
+        if (!text) return;
+        try {
+            applyConfigData(JSON.parse(text));
+        } catch {
+            console.warn('membrane: could not parse pasted configuration');
+        }
+    }
+
+    // Folder title extras: a dice button (randomize this section now) and a
+    // lock toggle (exclude the whole section from randomize / paste).
+    function decorateFolder(folder, sec) {
+        const dice = document.createElement('span');
+        dice.className = 'rand-go';
+        dice.textContent = '\u{1F3B2}\u2192';
+        dice.title = `randomize "${sec.title}" (unlocked params only)`;
+        dice.addEventListener('click', (e) => { e.stopPropagation(); randomizeSections([sec]); });
+        folder.$title.appendChild(dice);
+        folder.$title.appendChild(makeLockToggle(sec.id, `section "${sec.title}"`));
+    }
+
+    for (const sec of PARAM_SCHEMA) {
+        const folder = gui.addFolder(sec.title);
+        decorateFolder(folder, sec);
+        if (sec.markCustom) {
+            presetCtrl = folder.add(CONFIG, 'materialPreset', [...Object.keys(MATERIALS), 'custom'])
+                .name('preset')
+                .onChange((name) => {
+                    const p = MATERIALS[name];
+                    if (!p) return;
+                    Object.assign(CONFIG.material, p);
+                    folder.controllers.forEach((ctrl) => ctrl.updateDisplay());
+                });
+        }
+        for (const p of sec.params) {
+            const obj = sec.obj();
+            const ctrl = p.color
+                ? folder.addColor(obj, p.key)
+                : folder.add(obj, p.key, p.min, p.max, p.step);
+            if (p.apply) ctrl.onChange(p.apply);
+            if (p.rebuild) ctrl.onFinishChange(restartAll);
+            if (p.applyFinish) ctrl.onFinishChange(p.applyFinish);
+            if (sec.markCustom) {
+                ctrl.onChange((v) => {
+                    CONFIG.materialPreset = 'custom';
+                    presetCtrl.updateDisplay();
+                    if (p.apply) p.apply(v);
+                });
+            }
+            ctrl.$name.appendChild(makeLockToggle(`${sec.id}.${p.key}`, `"${p.key}"`));
+        }
+        if (sec.id !== 'material') folder.close();
+    }
+
+    gui.add({ 'randomize all': () => randomizeSections(PARAM_SCHEMA) }, 'randomize all');
+    gui.add({ 'copy config': copyConfig }, 'copy config');
+    gui.add({ 'paste config': pasteConfig }, 'paste config');
     gui.add({ restart: restartAll }, 'restart');
 
     window.addEventListener('keydown', (e) => {
         if (e.key === 'h' || e.key === 'H') gui.show(gui._hidden);
     });
     return gui;
+}
+
+// Visual hierarchy + lock styling. The root "membrane lab" panel contains all
+// section folders; child folders are inset with a guide line so the container
+// reads as the parent. Lock icons live inline: dice = randomizable, padlock =
+// excluded from randomization.
+function injectGuiStyles() {
+    const style = document.createElement('style');
+    style.textContent = `
+        .lil-gui.root > .children > .lil-gui {
+            margin-left: 10px;
+            border-left: 1px solid #3a3a3a;
+        }
+        .lil-gui .rand-lock, .lil-gui .rand-go {
+            margin-left: auto;
+            padding: 0 3px;
+            cursor: pointer;
+            font-size: 11px;
+            opacity: 0.55;
+            user-select: none;
+        }
+        .lil-gui .name .rand-lock { float: right; }
+        .lil-gui .rand-lock:hover, .lil-gui .rand-go:hover { opacity: 1; }
+        .lil-gui .rand-lock.locked { opacity: 1; color: #e0b52e; }
+        .lil-gui .title { display: flex; align-items: center; }
+        .lil-gui .title .rand-go { margin-left: auto; }
+        .lil-gui .title .rand-lock { margin-left: 0; }
+    `;
+    document.head.appendChild(style);
 }
 
 function restartAll() {
@@ -940,4 +1141,4 @@ const gui = buildGUI();
 requestAnimationFrame(tick);
 
 // Console handle for quick tweaking: MEMBRANE.CONFIG.…, MEMBRANE.restart()
-window.MEMBRANE = { CONFIG, MATERIALS, gui, restart: restartAll, get phase() { return phase; }, get mem() { return mem; } };
+window.MEMBRANE = { CONFIG, MATERIALS, gui, restart: restartAll, get phase() { return phase; }, get mem() { return mem; }, get ballPos() { return ballPos; } };
