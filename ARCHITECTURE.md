@@ -69,5 +69,6 @@ feel as long as possible.
 - `releases/august/index.html` — Release page
 - `releases/princess/index.html` — Release page
 - `lab/membrane/` — Experimental 3D logo animation (point piercing a stretched
-  film; Verlet mass–spring simulation, all constants in `CONFIG`, GUI on `H`).
-  Not linked from the main site.
+  film; Verlet mass–spring simulation with strain-stiffening materials —
+  presets in `MATERIALS`, constants in `CONFIG`, seeded imperfection, GUI on
+  `H`). Not linked from the main site.
