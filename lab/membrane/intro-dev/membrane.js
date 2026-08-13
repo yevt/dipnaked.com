@@ -164,7 +164,6 @@ const CONFIG = {
         funnelNeckRadius: 0.06,   // radius (units) of the funnel bottom before it goes vertical
         funnelSharpness: 3.2,     // curve exponent: higher = flatter rim + sharper drop
         funnelRimFlat: 0.55,      // fraction of radius that stays near-flat before the drop begins
-        holdHeal: true,           // block HEAL/re-knit while attractor is active (funnel stays torn at tip)
     },
 };
 
@@ -784,9 +783,10 @@ function physicsStep(dt) {
 
     // Healing home-springs grow over the heal ramp. Forces, not lerp: the film
     // keeps its inertia, overshoots the rest plane and rings while closing.
-    // Suppressed while the intro attractor is active (we don't want to heal back to flat).
+    // Fully disabled during the intro run — the attractor owns the shape and
+    // must not fight home-springs pulling back to the flat rest plane.
     let healK = 0;
-    if (phase === Phase.HEAL && !(introActive && introCfg.holdHeal)) {
+    if (phase === Phase.HEAL && !introCfg.enabled) {
         const ramp = Math.min(1, phaseTime / Math.max(0.01, CONFIG.rupture.healDuration));
         healK = mat.healSpring * ramp * ramp;
     }
@@ -1036,9 +1036,9 @@ function physicsStep(dt) {
 
     // Re-knitting: a torn link heals only when both of its ends have actually
     // come home — the hole closes unevenly, licking shut from all sides.
-    // Suppressed while the intro attractor holds the torn shape open.
-    const holdOpen = introActive && introCfg.holdHeal;
-    if (phase === Phase.HEAL && mem.brokenCount > 0 && !holdOpen) {
+    // Fully disabled during the intro run — the tear must persist so the
+    // final frame matches the logo silhouette (funnel with an open neck).
+    if (phase === Phase.HEAL && mem.brokenCount > 0 && !introCfg.enabled) {
         const snap2 = mat.healSnap * mat.healSnap;
         for (let ci = 0; ci < structCount; ci++) {
             const c = constraints[ci];
@@ -1225,7 +1225,8 @@ function tick(now) {
             if (CONFIG.intro.enabled && CONFIG.intro.autoTrigger && !introState.active) {
                 if (phaseTime >= CONFIG.intro.triggerDelay) engageIntro();
             }
-            if (phaseTime >= CONFIG.rupture.healDelay) setPhase(Phase.HEAL);
+            // Never advance to HEAL during the intro — attractor holds the funnel forever.
+            if (!CONFIG.intro.enabled && phaseTime >= CONFIG.rupture.healDelay) setPhase(Phase.HEAL);
         }
     }
     if (mem.needIndexRebuild) { rebuildIndex(); mem.needIndexRebuild = false; }
