@@ -44,12 +44,12 @@ const MATERIALS = {
         maxStiffness: 0.95,    // stiffness deep in the stretched regime
         compressResist: 0.15,  // fraction of baseStiffness resisting compression (wrinkles)
         bendStiffness: 0.03,   // straightening (2nd-neighbour) stiffness
-        damping: 0.9997,       // internal velocity keep-factor (near-1 → long sway)
+        damping: 0.99992,      // internal velocity keep-factor (very near-1 → near-lossless sway)
         massScale: 1.0,        // node inertia vs impulses (recoil, heal springs)
         grip: 0.6,             // tangential drag on non-stuck contact vertices 0..1
         adhesionStrength: 0.05, // sticky-contact detach threshold (drift, units); 0 = no sticking
         adhesionZone: 0.8,     // fraction of the leading hemisphere where vertices may latch on
-        tearStrain: 7.5,       // strain that snaps a link — tougher: film stretches deeper before it goes
+        tearStrain: 10.5,      // strain that snaps a link — much tougher: film stretches deeper and slower before it goes
         tearCascade: 0.8,      // neighbour threshold multiplier after a snap (unzip)
         recoil: 0.55,          // snap-back impulse per unit strain
         healSpring: 14,        // home-spring stiffness at full heal ramp (1/s²)
@@ -115,14 +115,17 @@ const CONFIG = {
         exitDistance: 4.5,        // despawn this far below the film
         color: '#2ec8e0',
     },
+    // rupture.maxDepth is a hard failsafe. With tougher material we need more room to stretch
+    // before the failsafe fires or the depth-limit tears prematurely.
+
     rupture: {
-        maxDepth: 2.6,            // failsafe: force-tear if the centre ever gets this deep
-        healDelay: 1.2,           // s after rupture before healing starts
-        healDuration: 3.0,        // s for the home-springs to reach full strength
+        maxDepth: 3.4,            // failsafe: force-tear if the centre ever gets this deep
+        healDelay: 1.2,           // s after rupture before healing starts (ignored in oneShot)
+        healDuration: 3.0,        // s for the home-springs to reach full strength (ignored in oneShot)
     },
     oscillation: {
-        damping: 0.9999,          // post-rupture damping (near-1 → very long, near-lossless sway)
-        settleTime: 5.0,          // s of oscillation after full re-knit before the next cycle
+        damping: 0.99995,         // post-rupture damping (very near-1 → sustained sloshing)
+        settleTime: 5.0,          // s of oscillation after full re-knit before the next cycle (unused in oneShot)
     },
     imperfection: {               // seeded chaos sources; 0 = sterile symmetry
         seed: 3,
@@ -142,7 +145,8 @@ const CONFIG = {
     },
     timing: {
         timeScale: 1.0,           // global slow-motion factor
-        restPause: 0.15,          // s of calm film before the sphere drops (short — responsive to restart click)
+        restPause: 1.0,           // s of calm film on first load — lets the viewer see the still membrane
+        restartPause: 0.15,       // s pause after a manual restart click (much shorter — feels instant)
     },
     debug: {
         showContact: false,       // wireframe contact sphere + penetrating faces in red
@@ -1585,10 +1589,18 @@ function injectGuiStyles() {
     document.head.appendChild(style);
 }
 
-function restartAll() {
+// Manual restart from the external button — fresh drop with the short pause.
+function restartAll(manual = true) {
     buildMembrane();
     restartCycle();
     disengageIntro();
+    // If the manual restartPause is shorter than restPause, pre-advance phaseTime
+    // so the next auto-drop fires almost immediately after the click.
+    if (manual) {
+        const pause = Math.max(0, CONFIG.timing.restartPause ?? 0);
+        const rest = Math.max(0, CONFIG.timing.restPause ?? 0);
+        if (pause < rest) phaseTime = rest - pause;
+    }
 }
 
 // ----------------------------------------------------------------------------
