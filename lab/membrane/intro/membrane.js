@@ -95,7 +95,7 @@ const CONFIG = {
         cameraDistance: 7.0,      // units from origin
         cameraHeight: 0.4,        // camera y
         lookAtY: -0.9,            // where the camera looks (y)
-        membraneTilt: -24,        // deg; negative tips the plane away → we see its back
+        membraneTilt: -20,        // deg; matched to the logo rim ellipse aspect (~2.97 w/h)
     },
     membrane: {
         radius: 1.6,              // disc radius
@@ -172,8 +172,8 @@ const CONFIG = {
         // -- camera dolly (CSS zoom-out of the whole canvas onto the logo) --
         dollyDelay: 3.0,          // s after PIERCED before the pull-back starts (let the slosh read)
         dollyDuration: 5.0,       // s of the pull-back flight
-        logoRimWidthFrac: 0.86,   // rim ellipse width as a fraction of the logo image square
-        logoRimTopFrac: 0.15,     // rim top edge as a fraction of the logo image square height
+        logoRimWidthFrac: 0.84,   // rim ellipse width as a fraction of the logo image square
+        logoRimTopFrac: 0.18,     // rim top edge as a fraction of the logo image square height
     },
 };
 
