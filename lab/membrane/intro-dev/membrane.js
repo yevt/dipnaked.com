@@ -44,12 +44,12 @@ const MATERIALS = {
         maxStiffness: 0.95,    // stiffness deep in the stretched regime
         compressResist: 0.15,  // fraction of baseStiffness resisting compression (wrinkles)
         bendStiffness: 0.03,   // straightening (2nd-neighbour) stiffness
-        damping: 0.9985,       // internal velocity keep-factor
+        damping: 0.9997,       // internal velocity keep-factor (near-1 → long sway)
         massScale: 1.0,        // node inertia vs impulses (recoil, heal springs)
         grip: 0.6,             // tangential drag on non-stuck contact vertices 0..1
         adhesionStrength: 0.05, // sticky-contact detach threshold (drift, units); 0 = no sticking
         adhesionZone: 0.8,     // fraction of the leading hemisphere where vertices may latch on
-        tearStrain: 5.5,       // strain that snaps a link (latex stretches far)
+        tearStrain: 7.5,       // strain that snaps a link — tougher: film stretches deeper before it goes
         tearCascade: 0.8,      // neighbour threshold multiplier after a snap (unzip)
         recoil: 0.55,          // snap-back impulse per unit strain
         healSpring: 14,        // home-spring stiffness at full heal ramp (1/s²)
@@ -121,7 +121,7 @@ const CONFIG = {
         healDuration: 3.0,        // s for the home-springs to reach full strength
     },
     oscillation: {
-        damping: 0.9995,          // weak post-rupture damping → the film sloshes and rings
+        damping: 0.9999,          // post-rupture damping (near-1 → very long, near-lossless sway)
         settleTime: 5.0,          // s of oscillation after full re-knit before the next cycle
     },
     imperfection: {               // seeded chaos sources; 0 = sterile symmetry
@@ -142,7 +142,7 @@ const CONFIG = {
     },
     timing: {
         timeScale: 1.0,           // global slow-motion factor
-        restPause: 1.5,           // s of calm film between cycles
+        restPause: 0.15,          // s of calm film before the sphere drops (short — responsive to restart click)
     },
     debug: {
         showContact: false,       // wireframe contact sphere + penetrating faces in red
@@ -154,16 +154,17 @@ const CONFIG = {
     // healing back to flat, the film settles into the logo funnel.
     // ------------------------------------------------------------------------
     intro: {
-        enabled: true,           // master switch
+        enabled: false,           // master switch — attractor OFF for pure-oscillation study
         autoTrigger: true,        // switch to attract mode automatically at PIERCED
         triggerDelay: 0.35,       // s after PIERCED before attractor engages (let recoil breathe)
         rampDuration: 1.2,        // s to ramp attractor strength from 0 → full
         strength: 32,             // full attractor spring constant (1/s^2)
         damping: 0.965,           // node damping during attract mode (kills residual sway)
-        funnelDepth: 1.35,        // z-depth of the funnel neck (units, along -normal)
+        funnelDepth: 1.15,        // depth of the funnel neck (units along -Y)
         funnelNeckRadius: 0.06,   // radius (units) of the funnel bottom before it goes vertical
-        funnelSharpness: 3.2,     // curve exponent: higher = flatter rim + sharper drop
-        funnelRimFlat: 0.55,      // fraction of radius that stays near-flat before the drop begins
+        funnelSharpness: 2.0,     // curve exponent: higher = flatter rim + sharper drop
+        funnelRimFlat: 0.22,      // fraction of radius that stays near-flat before the drop begins
+        oneShot: true,            // after the ball leaves the frame, block any new drop — restart requires the user
     },
 };
 
@@ -608,6 +609,7 @@ let ballStuck = false;        // the point has caught the film's center
 let healedAt = -1;            // phaseTime when the last link re-knitted
 let cycleIndex = 0;
 let cycleRng = mulberry32(1); // seeded in buildJitter; drives per-cycle variation
+let dropUsed = false;         // one-shot guard: once the ball fires, no auto-repeat
 
 function setPhase(p) { phase = p; phaseTime = 0; if (p === Phase.HEAL) healedAt = -1; }
 
@@ -629,6 +631,7 @@ function restartCycle() {
     ballMesh.visible = false;
     ballEngaged = false;
     ballStuck = false;
+    dropUsed = false;
     setPhase(Phase.REST);
 }
 
@@ -1225,14 +1228,18 @@ function tick(now) {
             if (CONFIG.intro.enabled && CONFIG.intro.autoTrigger && !introState.active) {
                 if (phaseTime >= CONFIG.intro.triggerDelay) engageIntro();
             }
-            // Never advance to HEAL during the intro — attractor holds the funnel forever.
-            if (!CONFIG.intro.enabled && phaseTime >= CONFIG.rupture.healDelay) setPhase(Phase.HEAL);
+            // In one-shot / intro modes we never re-knit — the film keeps sloshing (or attractor holds).
+            const suppressHeal = CONFIG.intro.enabled || CONFIG.intro.oneShot;
+            if (!suppressHeal && phaseTime >= CONFIG.rupture.healDelay) setPhase(Phase.HEAL);
         }
     }
     if (mem.needIndexRebuild) { rebuildIndex(); mem.needIndexRebuild = false; }
 
     // Phase transitions driven by wall-clock phase time
-    if (phase === Phase.REST && phaseTime >= CONFIG.timing.restPause) {
+    // One-shot: once the ball has fired this session, REST never spawns a new drop.
+    // The user must hit the external restart button to arm the next cycle.
+    if (phase === Phase.REST && phaseTime >= CONFIG.timing.restPause
+        && !(CONFIG.intro.oneShot && dropUsed)) {
         const ang = cycleRng() * Math.PI * 2;
         const off = CONFIG.imperfection.entryOffset * (0.25 + 0.75 * cycleRng());
         ballPos.set(Math.cos(ang) * off, CONFIG.ball.startHeight, Math.sin(ang) * off);
@@ -1240,6 +1247,7 @@ function tick(now) {
         ballEngaged = true;      // physics runs and the sphere is drawn as it falls
         ballMesh.visible = true;  // the film now wraps it, so it stays visible from any angle
         cycleIndex++;
+        dropUsed = true;
         mem.tearRng = mulberry32(((Math.round(CONFIG.imperfection.seed) * 2654435761) ^ (cycleIndex * 40503)) >>> 0);
         setPhase(Phase.APPROACH);
     } else if (phase === Phase.PIERCED || phase === Phase.HEAL) {
@@ -1648,3 +1656,7 @@ window.MEMBRANE = { CONFIG, MATERIALS, gui, restart: restartAll,
     engageIntro, disengageIntro,
     get phase() { return phase; }, get mem() { return mem; }, get ballPos() { return ballPos; },
     get introState() { return introState; } };
+
+// Standalone external restart button (index.html) — fires a fresh drop.
+const restartBtn = document.getElementById('restart-btn');
+if (restartBtn) restartBtn.addEventListener('click', () => restartAll());
