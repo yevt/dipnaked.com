@@ -1613,6 +1613,36 @@ restartCycle();
 const gui = buildGUI();
 requestAnimationFrame(tick);
 
+// Dev helper: ?frozen=1 in URL → force the mesh straight into the funnel target
+// so screenshots and layout checks don't have to wait for the whole cycle.
+// Applies target positions to pos/prev, sets phase to PIERCED, engages intro.
+function snapToFunnel() {
+    const { pos, prev, home, ringOf, count, R } = mem;
+    for (let i = 0; i < count; i++) {
+        const j = i * 3;
+        const tR = ringOf[i] / R;
+        const d = funnelDepth(tR);
+        pos[j]     = home[j];
+        pos[j + 1] = home[j + 1] - d;
+        pos[j + 2] = home[j + 2];
+        prev[j]     = pos[j];
+        prev[j + 1] = pos[j + 1];
+        prev[j + 2] = pos[j + 2];
+    }
+    setPhase(Phase.PIERCED);
+    engageIntro();
+    // Push the ramp past full so damping wins immediately.
+    introState.startTime = (performance.now() / 1000) - (CONFIG.intro.rampDuration + 0.5);
+}
+try {
+    const q = new URLSearchParams(location.search);
+    if (q.get('frozen') === '1') {
+        // Wait one frame so buildMembrane has definitely populated buffers.
+        requestAnimationFrame(() => requestAnimationFrame(snapToFunnel));
+    }
+    window.MEMBRANE_SNAP_TO_FUNNEL = snapToFunnel;
+} catch (_) { /* noop */ }
+
 // Console handle for quick tweaking: MEMBRANE.CONFIG.…, MEMBRANE.restart()
 window.MEMBRANE = { CONFIG, MATERIALS, gui, restart: restartAll,
     engageIntro, disengageIntro,
