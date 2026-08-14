@@ -1939,7 +1939,9 @@ function zoomInit() {
     const block = document.querySelector('.center-block');
     // When crossfade is off, the DOM layout (logo + text) is visible from the start
     // so you can tune the camera curve against the final target directly.
-    if (block) { block.style.transition = 'none'; block.style.opacity = CONFIG.intro.crossfade ? '0' : '1'; }
+    // ?bare=1 — debug: hide the HTML logo layout entirely so only the WebGL film is visible
+    const bare = new URLSearchParams(location.search).has('bare');
+    if (block) { block.style.transition = 'none'; block.style.opacity = (bare || CONFIG.intro.crossfade) ? '0' : '1'; }
     applyLayoutLift();
     if (!measureBaseGeometry()) { zoomCtl.phase = 'idle'; return; }
     // Measure geometry needed for the auto-fit envelope, in world (unzoomed) px.
