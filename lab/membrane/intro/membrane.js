@@ -145,8 +145,8 @@ const CONFIG = {
     },
     timing: {
         timeScale: 1.0,           // global slow-motion factor
-        restPause: 1.0,           // s of calm film on first load — lets the viewer see the still membrane
-        restartPause: 0.15,       // s pause after a manual restart click (much shorter — feels instant)
+        restPause: 0.0,           // the drop is falling from the very first frame — no calm pause
+        restartPause: 0.0,        // manual restart: also instant
     },
     debug: {
         showContact: false,       // wireframe contact sphere + penetrating faces in red
@@ -169,16 +169,19 @@ const CONFIG = {
         funnelSharpness: 2.0,     // curve exponent: higher = flatter rim + sharper drop
         funnelRimFlat: 0.22,      // fraction of radius that stays near-flat before the drop begins
         oneShot: true,            // after the ball leaves the frame, block any new drop — restart requires the user
-        // -- camera dolly (CSS zoom-out of the whole canvas onto the logo) --
-        dollyDelay: 3.0,          // s after PIERCED before the pull-back starts (let the slosh read)
-        dollyDuration: 5.0,       // s of the pull-back flight
+        // -- continuous zoom-out: we START zoomed into the (live) logo and pull back --
+        overscanStart: 1.12,      // membrane rim width at t=0, as a fraction of viewport width (>1 = edges eaten)
+        fitWidth: 1.0,            // rim width fraction of viewport at the moment the ball touches the film
+        slowShrink: 0.10,         // max extra width fraction eaten by the slow pull-back during stretch/tear/slosh
+        slowTime: 9.0,            // s over which slowShrink would fully play out
+        finalDuration: 5.0,       // s of the accelerated final pull-back to the real layout scale
+        startCenterY: 0.5,        // rim center vertical position at start (fraction of viewport height)
+        edgePadPx: 1,             // ball spawn: how many px above the top screen edge it starts
+        layoutLiftPx: 11,         // lift of .center-block to balance the logo art's internal top padding
         logoRimWidthFrac: 0.84,   // rim ellipse width as a fraction of the logo image square
         logoRimTopFrac: 0.18,     // rim top edge as a fraction of the logo image square height
-        // -- start framing & ending fade --
-        centerStart: true,        // CSS-shift the canvas so the rim ellipse starts centered in the viewport
-        startCenterY: 0.5,        // where the rim center sits vertically at start (fraction of viewport height)
-        fadeOut: true,            // after landing on the logo, fade the live canvas away — the static logo freezes the moment
-        fadeDelay: 0.6,           // s after the flight ends before the fade starts
+        fadeOut: true,            // after landing, fade the live canvas away — the static logo freezes the moment
+        fadeDelay: 0.6,           // s after landing before the fade starts
         fadeDuration: 1.6,        // s of the fade to nothing
     },
 };
@@ -1245,9 +1248,6 @@ function tick(now) {
             if (CONFIG.intro.enabled && CONFIG.intro.autoTrigger && !introState.active) {
                 if (phaseTime >= CONFIG.intro.triggerDelay) engageIntro();
             }
-            // Camera pull-back onto the logo once the slosh has had time to read.
-            if (CONFIG.intro.oneShot && !dollyState.started
-                && phaseTime >= CONFIG.intro.dollyDelay) startDolly();
             // In one-shot / intro modes we never re-knit — the film keeps sloshing (or attractor holds).
             const suppressHeal = CONFIG.intro.enabled || CONFIG.intro.oneShot;
             if (!suppressHeal && phaseTime >= CONFIG.rupture.healDelay) setPhase(Phase.HEAL);
@@ -1262,7 +1262,8 @@ function tick(now) {
         && !(CONFIG.intro.oneShot && dropUsed)) {
         const ang = cycleRng() * Math.PI * 2;
         const off = CONFIG.imperfection.entryOffset * (0.25 + 0.75 * cycleRng());
-        ballPos.set(Math.cos(ang) * off, CONFIG.ball.startHeight, Math.sin(ang) * off);
+        const startH = zoomCtl.spawnH > 0 ? zoomCtl.spawnH : CONFIG.ball.startHeight;
+        ballPos.set(Math.cos(ang) * off, startH, Math.sin(ang) * off);
         clearSticky();           // fresh drop: no leftover latches or bans
         ballEngaged = true;      // physics runs and the sphere is drawn as it falls
         ballMesh.visible = true;  // the film now wraps it, so it stays visible from any angle
@@ -1289,6 +1290,7 @@ function tick(now) {
     mem.geometry.attributes.position.needsUpdate = true;
     updateColors();
     updateContactDebug();
+    updateZoom(dt);
     renderer.render(scene, camera);
 }
 
@@ -1380,11 +1382,15 @@ const PARAM_SCHEMA = [
         { key: 'funnelNeckRadius', min: 0, max: 0.5, step: 0.01 },
         { key: 'funnelSharpness', min: 0.5, max: 8, step: 0.1 },
         { key: 'funnelRimFlat', min: 0, max: 0.9, step: 0.02 },
-        { key: 'dollyDelay', min: 0, max: 10, step: 0.1 },
-        { key: 'dollyDuration', min: 0.5, max: 12, step: 0.1 },
+        { key: 'overscanStart', min: 1, max: 2, step: 0.01 },
+        { key: 'fitWidth', min: 0.5, max: 1.2, step: 0.01 },
+        { key: 'slowShrink', min: 0, max: 0.3, step: 0.01 },
+        { key: 'slowTime', min: 1, max: 20, step: 0.5 },
+        { key: 'finalDuration', min: 0.5, max: 12, step: 0.1 },
+        { key: 'startCenterY', min: 0.2, max: 0.8, step: 0.01 },
+        { key: 'layoutLiftPx', min: -60, max: 60, step: 1, apply: applyLayoutLift },
         { key: 'logoRimWidthFrac', min: 0.5, max: 1, step: 0.01 },
         { key: 'logoRimTopFrac', min: 0, max: 0.5, step: 0.01 },
-        { key: 'startCenterY', min: 0.2, max: 0.8, step: 0.01, apply: applyStartFraming },
         { key: 'fadeDelay', min: 0, max: 5, step: 0.1 },
         { key: 'fadeDuration', min: 0.2, max: 5, step: 0.1 },
     ] },
@@ -1617,7 +1623,7 @@ function restartAll(manual = true) {
     buildMembrane();
     restartCycle();
     disengageIntro();
-    resetDolly();
+    zoomInit();
     // If the manual restartPause is shorter than restPause, pre-advance phaseTime
     // so the next auto-drop fires almost immediately after the click.
     if (manual) {
@@ -1641,11 +1647,26 @@ function disengageIntro() {
 }
 
 // ----------------------------------------------------------------------------
-// Camera dolly — a CSS transform flight of the whole canvas onto the logo.
-// A uniform scale keeps the rendered perspective intact, which is exactly what
-// lets the live membrane rim land pixel-perfect on the static logo rim.
+// Continuous zoom-out (the "reverse dolly").
+// The world = the final page layout at scale 1; the membrane's world rect is
+// the logo rim rect (T_land maps canvas px -> world px). One time-varying
+// similarity W(t): q -> Z(t)*q + O(t) is applied to BOTH the layout (CSS
+// transform on #layout-zoom) and the membrane render. The canvas itself is
+// never CSS-scaled: the mapping is folded into the camera's view offset, so
+// the membrane renders at full native resolution at every zoom level.
 // ----------------------------------------------------------------------------
-const dollyState = { started: false, fadeTimer: 0 };
+const zoomCtl = {
+    phase: 'idle',             // idle | drop | slow | final | landed
+    Z: 1, Z0: 1, Zfit: 1, Zslow: 1, Zc: 1,
+    C0: { x: 0, y: 0 },        // rim center on screen at t=0
+    Mw: { x: 0, y: 0 },        // rim center in world (= final layout) px
+    sL: 1, tL: { x: 0, y: 0 }, // T_land: canvas px -> world px
+    rimWw: 1,                  // rim width in world px
+    spawnH: 0, h0: 0,          // computed ball spawn height (world units)
+    tFinal: 0,                 // time inside the final pull-back
+    peakY: -Infinity, rising: false, // first-upswing detector
+    fadeTimer: 0,
+};
 
 // Project the pinned outer ring of the membrane to canvas CSS pixels.
 function computeRimScreenBBox() {
@@ -1689,60 +1710,168 @@ function computeLogoRimRect() {
     };
 }
 
-function startDolly(instant = false) {
+function layoutWrap() { return document.getElementById('layout-zoom'); }
+
+function applyLayoutLift() {
+    const block = document.querySelector('.center-block');
+    if (block) block.style.transform = `translateY(${-CONFIG.intro.layoutLiftPx}px)`;
+}
+
+// Measure the base geometry with everything at identity: the logo rect in
+// final-layout coordinates and the membrane rim bbox in raw canvas pixels.
+function measureBaseGeometry() {
+    const wrap = layoutWrap();
+    const prev = wrap ? wrap.style.transform : '';
+    if (wrap) wrap.style.transform = 'none';
     const target = computeLogoRimRect();
-    if (!target || !mem) return;
+    if (wrap) wrap.style.transform = prev;
+    if (!target || !mem) return false;
+    camera.clearViewOffset();
     const rim = computeRimScreenBBox();
-    if (!isFinite(rim.width) || rim.width <= 0) return;
-    const s = target.width / rim.width;
-    const tx = target.cx - s * rim.cx;
-    const ty = target.top - s * rim.top;
-    const el = renderer.domElement;
-    el.style.transformOrigin = '0 0';
-    el.style.transition = instant
-        ? 'none'
-        : `transform ${CONFIG.intro.dollyDuration}s cubic-bezier(0.45, 0.05, 0.15, 1)`;
-    el.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
-    dollyState.started = true;
-    // Schedule the ending fade: the live membrane dissolves into the static logo.
-    clearTimeout(dollyState.fadeTimer);
-    if (CONFIG.intro.fadeOut && !instant) {
-        const waitMs = (CONFIG.intro.dollyDuration + CONFIG.intro.fadeDelay) * 1000;
-        dollyState.fadeTimer = setTimeout(() => {
-            el.style.transition = `opacity ${CONFIG.intro.fadeDuration}s ease-out`;
-            el.style.opacity = '0';
-        }, waitMs);
+    if (!isFinite(rim.width) || rim.width <= 0) return false;
+    zoomCtl.sL = target.width / rim.width;
+    zoomCtl.tL = { x: target.cx - zoomCtl.sL * rim.cx,
+                   y: target.top - zoomCtl.sL * rim.top };
+    const rimCy = (rim.top + rim.bottom) / 2;
+    zoomCtl.Mw = { x: zoomCtl.sL * rim.cx + zoomCtl.tL.x,
+                   y: zoomCtl.sL * rimCy + zoomCtl.tL.y };
+    zoomCtl.rimWw = target.width;
+    return true;
+}
+
+// Screen y of a point h units above the membrane center under mapping sigma/tau
+// (projected with the base camera — call only while the view offset is clear).
+function screenYAtHeight(h, sigma, tauY) {
+    tiltGroup.updateMatrixWorld(true);
+    const v = new THREE.Vector3(0, h, 0).applyMatrix4(tiltGroup.matrixWorld);
+    v.project(camera);
+    return sigma * ((1 - v.y) / 2 * window.innerHeight) + tauY;
+}
+
+// Solve for the spawn height that puts the ball edgePadPx above the top screen
+// edge on the very first frame (viewport-dependent -> computed, not fixed).
+function computeSpawnHeight() {
+    const { Z0, sL, tL, C0, Mw } = zoomCtl;
+    const sigma = Z0 * sL;
+    const tauY = Z0 * tL.y + (C0.y - Z0 * Mw.y);
+    const pxPerUnit = Math.abs(screenYAtHeight(0, sigma, tauY) - screenYAtHeight(1, sigma, tauY));
+    const targetY = -(CONFIG.ball.radius * pxPerUnit + CONFIG.intro.edgePadPx);
+    let lo = 0.2, hi = 60;
+    for (let i = 0; i < 48; i++) {
+        const mid = (lo + hi) / 2;
+        if (screenYAtHeight(mid, sigma, tauY) > targetY) lo = mid; else hi = mid;
     }
+    return (lo + hi) / 2;
 }
 
-// Start framing: shift the (untransformed) canvas so the rim ellipse is
-// horizontally centered and sits at startCenterY of the viewport height.
-function applyStartFraming() {
-    if (dollyState.started || !mem) return;
-    const el = renderer.domElement;
-    if (!CONFIG.intro.centerStart) { el.style.transform = 'none'; return; }
-    const rim = computeRimScreenBBox();
-    if (!isFinite(rim.width) || rim.width <= 0) { el.style.transform = 'none'; return; }
-    const dx = window.innerWidth / 2 - rim.cx;
-    const dy = window.innerHeight * CONFIG.intro.startCenterY - (rim.top + rim.bottom) / 2;
-    el.style.transformOrigin = '0 0';
-    el.style.transform = `translate(${dx}px, ${dy}px)`;
+// Apply the current similarity W: layout via CSS transform, membrane via the
+// camera view offset (canvas stays untransformed -> native-resolution render).
+function applyZoom() {
+    const { Z, Z0, C0, Mw, sL, tL } = zoomCtl;
+    const u = Z0 > 1
+        ? THREE.MathUtils.clamp(1 - Math.log(Math.max(Z, 1)) / Math.log(Z0), 0, 1)
+        : 1;
+    const C = { x: C0.x + (Mw.x - C0.x) * u, y: C0.y + (Mw.y - C0.y) * u };
+    const O = { x: C.x - Z * Mw.x, y: C.y - Z * Mw.y };
+    const wrap = layoutWrap();
+    if (wrap) wrap.style.transform = `translate(${O.x}px, ${O.y}px) scale(${Z})`;
+    const sigma = Z * sL;
+    const tau = { x: Z * tL.x + O.x, y: Z * tL.y + O.y };
+    const w = window.innerWidth, h = window.innerHeight;
+    camera.setViewOffset(w, h, -tau.x / sigma, -tau.y / sigma, w / sigma, h / sigma);
 }
 
-function resetDolly() {
+function meanFreeY() {
+    const { pos, pinned, count } = mem;
+    let s = 0, n = 0;
+    for (let i = 0; i < count; i++) {
+        if (pinned[i]) continue;
+        s += pos[i * 3 + 1]; n++;
+    }
+    return n ? s / n : 0;
+}
+
+function scheduleFade() {
+    if (!CONFIG.intro.fadeOut) return;
+    clearTimeout(zoomCtl.fadeTimer);
     const el = renderer.domElement;
-    clearTimeout(dollyState.fadeTimer);
+    zoomCtl.fadeTimer = setTimeout(() => {
+        el.style.transition = `opacity ${CONFIG.intro.fadeDuration}s ease-out`;
+        el.style.opacity = '0';
+    }, CONFIG.intro.fadeDelay * 1000);
+}
+
+function zoomBounds() {
+    const cfg = CONFIG.intro;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    zoomCtl.Z0 = Math.max(1, cfg.overscanStart * vw / zoomCtl.rimWw);
+    zoomCtl.Zfit = Math.max(1, cfg.fitWidth * vw / zoomCtl.rimWw);
+    zoomCtl.Zslow = Math.max(1, zoomCtl.Zfit * (1 - cfg.slowShrink));
+    zoomCtl.C0 = { x: vw / 2, y: vh * cfg.startCenterY };
+}
+
+// (Re)initialize the whole zoom flight. Called on boot and on manual restart.
+function zoomInit() {
+    clearTimeout(zoomCtl.fadeTimer);
+    const el = renderer.domElement;
     el.style.transition = 'none';
     el.style.opacity = '1';
-    el.style.transform = 'none';
-    dollyState.started = false;
-    applyStartFraming();
+    applyLayoutLift();
+    if (!measureBaseGeometry()) { zoomCtl.phase = 'idle'; return; }
+    zoomBounds();
+    zoomCtl.Z = zoomCtl.Z0;
+    zoomCtl.tFinal = 0;
+    zoomCtl.peakY = -Infinity;
+    zoomCtl.rising = false;
+    zoomCtl.spawnH = computeSpawnHeight();
+    zoomCtl.h0 = zoomCtl.spawnH;
+    zoomCtl.phase = 'drop';
+    applyZoom();
 }
 
-// Keep the framing correct on viewport resize — landed or not.
+const easeInOutCubic = (p) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
+
+// Per-frame zoom driver. Phase A (drop) is slaved to the ball position so the
+// film fits the screen exactly when the sphere touches it; phase B (slow) is a
+// gentle exponential shrink capped at Zslow; phase C (final) kicks in on the
+// film's first upswing after the tear and accelerates to the real layout.
+function updateZoom(dt) {
+    const zc = zoomCtl, cfg = CONFIG.intro;
+    if (zc.phase === 'idle' || zc.phase === 'landed') return;
+    if (zc.phase === 'drop') {
+        let p = 0;
+        if (ballEngaged) {
+            const yTouch = ballCollisionRadius();
+            p = THREE.MathUtils.clamp((zc.h0 - ballPos.y) / Math.max(0.001, zc.h0 - yTouch), 0, 1);
+        }
+        zc.Z = Math.exp(THREE.MathUtils.lerp(Math.log(zc.Z0), Math.log(zc.Zfit), p));
+        if (ballStuck || p >= 1) zc.phase = 'slow';
+    } else if (zc.phase === 'slow') {
+        const rate = (cfg.slowShrink > 0 && cfg.slowTime > 0)
+            ? -Math.log(1 - Math.min(0.95, cfg.slowShrink)) / cfg.slowTime : 0;
+        zc.Z = Math.max(zc.Zslow, zc.Z * Math.exp(-rate * dt));
+        if (phase === Phase.PIERCED) {
+            const my = meanFreeY();
+            if (my > zc.peakY) { zc.peakY = my; if (my > 0.05) zc.rising = true; }
+            const topReached = zc.rising && my < zc.peakY - 0.01;
+            if (topReached || phaseTime > 6) { zc.Zc = zc.Z; zc.tFinal = 0; zc.phase = 'final'; }
+        }
+    } else if (zc.phase === 'final') {
+        zc.tFinal += dt;
+        const p = Math.min(1, zc.tFinal / Math.max(0.1, cfg.finalDuration));
+        zc.Z = Math.exp(THREE.MathUtils.lerp(Math.log(zc.Zc), 0, easeInOutCubic(p)));
+        if (p >= 1) { zc.Z = 1; zc.phase = 'landed'; scheduleFade(); }
+    }
+    applyZoom();
+}
+
+// Re-derive the geometry on resize; keep the current zoom phase alive.
 window.addEventListener('resize', () => {
-    if (dollyState.started) startDolly(true);
-    else applyStartFraming();
+    if (!measureBaseGeometry()) return;
+    zoomBounds();
+    if (zoomCtl.phase === 'landed' || zoomCtl.phase === 'idle') zoomCtl.Z = 1;
+    else zoomCtl.Z = Math.min(zoomCtl.Z, zoomCtl.Z0);
+    applyZoom();
 });
 
 // ----------------------------------------------------------------------------
@@ -1764,7 +1893,7 @@ const gui = buildGUI();
 try {
     if (new URLSearchParams(location.search).get('gui') !== '1') gui.domElement.style.display = 'none';
 } catch (_) { /* noop */ }
-resetDolly(); // applies the start framing
+zoomInit(); // arms the zoom flight (measures geometry, computes the spawn height)
 requestAnimationFrame(tick);
 
 // Dev helper: ?frozen=1 in URL → force the mesh straight into the funnel target
