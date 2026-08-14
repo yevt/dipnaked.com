@@ -174,6 +174,12 @@ const CONFIG = {
         dollyDuration: 5.0,       // s of the pull-back flight
         logoRimWidthFrac: 0.84,   // rim ellipse width as a fraction of the logo image square
         logoRimTopFrac: 0.18,     // rim top edge as a fraction of the logo image square height
+        // -- start framing & ending fade --
+        centerStart: true,        // CSS-shift the canvas so the rim ellipse starts centered in the viewport
+        startCenterY: 0.5,        // where the rim center sits vertically at start (fraction of viewport height)
+        fadeOut: true,            // after landing on the logo, fade the live canvas away — the static logo freezes the moment
+        fadeDelay: 0.6,           // s after the flight ends before the fade starts
+        fadeDuration: 1.6,        // s of the fade to nothing
     },
 };
 
@@ -1378,6 +1384,9 @@ const PARAM_SCHEMA = [
         { key: 'dollyDuration', min: 0.5, max: 12, step: 0.1 },
         { key: 'logoRimWidthFrac', min: 0.5, max: 1, step: 0.01 },
         { key: 'logoRimTopFrac', min: 0, max: 0.5, step: 0.01 },
+        { key: 'startCenterY', min: 0.2, max: 0.8, step: 0.01, apply: applyStartFraming },
+        { key: 'fadeDelay', min: 0, max: 5, step: 0.1 },
+        { key: 'fadeDuration', min: 0.2, max: 5, step: 0.1 },
     ] },
 ];
 
@@ -1636,7 +1645,7 @@ function disengageIntro() {
 // A uniform scale keeps the rendered perspective intact, which is exactly what
 // lets the live membrane rim land pixel-perfect on the static logo rim.
 // ----------------------------------------------------------------------------
-const dollyState = { started: false };
+const dollyState = { started: false, fadeTimer: 0 };
 
 // Project the pinned outer ring of the membrane to canvas CSS pixels.
 function computeRimScreenBBox() {
@@ -1695,18 +1704,45 @@ function startDolly(instant = false) {
         : `transform ${CONFIG.intro.dollyDuration}s cubic-bezier(0.45, 0.05, 0.15, 1)`;
     el.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
     dollyState.started = true;
+    // Schedule the ending fade: the live membrane dissolves into the static logo.
+    clearTimeout(dollyState.fadeTimer);
+    if (CONFIG.intro.fadeOut && !instant) {
+        const waitMs = (CONFIG.intro.dollyDuration + CONFIG.intro.fadeDelay) * 1000;
+        dollyState.fadeTimer = setTimeout(() => {
+            el.style.transition = `opacity ${CONFIG.intro.fadeDuration}s ease-out`;
+            el.style.opacity = '0';
+        }, waitMs);
+    }
+}
+
+// Start framing: shift the (untransformed) canvas so the rim ellipse is
+// horizontally centered and sits at startCenterY of the viewport height.
+function applyStartFraming() {
+    if (dollyState.started || !mem) return;
+    const el = renderer.domElement;
+    if (!CONFIG.intro.centerStart) { el.style.transform = 'none'; return; }
+    const rim = computeRimScreenBBox();
+    if (!isFinite(rim.width) || rim.width <= 0) { el.style.transform = 'none'; return; }
+    const dx = window.innerWidth / 2 - rim.cx;
+    const dy = window.innerHeight * CONFIG.intro.startCenterY - (rim.top + rim.bottom) / 2;
+    el.style.transformOrigin = '0 0';
+    el.style.transform = `translate(${dx}px, ${dy}px)`;
 }
 
 function resetDolly() {
     const el = renderer.domElement;
+    clearTimeout(dollyState.fadeTimer);
     el.style.transition = 'none';
+    el.style.opacity = '1';
     el.style.transform = 'none';
     dollyState.started = false;
+    applyStartFraming();
 }
 
-// Keep the landed membrane glued to the logo on viewport resize.
+// Keep the framing correct on viewport resize — landed or not.
 window.addEventListener('resize', () => {
     if (dollyState.started) startDolly(true);
+    else applyStartFraming();
 });
 
 // ----------------------------------------------------------------------------
@@ -1724,6 +1760,11 @@ applyBallLook();
 buildMembrane();
 restartCycle();
 const gui = buildGUI();
+// Dev panel is hidden on this page unless ?gui=1 is in the URL.
+try {
+    if (new URLSearchParams(location.search).get('gui') !== '1') gui.domElement.style.display = 'none';
+} catch (_) { /* noop */ }
+resetDolly(); // applies the start framing
 requestAnimationFrame(tick);
 
 // Dev helper: ?frozen=1 in URL → force the mesh straight into the funnel target
