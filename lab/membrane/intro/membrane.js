@@ -172,7 +172,10 @@ const CONFIG = {
         // -- self-calibrating continuous zoom-out (see updateZoom for the math) --
         edgePadFrac: 0.03,        // safety pad (fraction of the SHORT viewport side) around the physics envelope
         envelopeShrink: 0.72,     // fraction of rupture.maxDepth actually used at Z0 (the deepest real excursion is ~70-75% of the failsafe)
-        totalDuration: 11.0,      // s of the whole ln(Z) S-curve, from t=0 (start) to Z=1 (landed)
+        totalDuration: 11.0,      // s of the whole ln(Z) curve, from t=0 (start) to Z=1 (landed)
+        knee: 0.55,               // 0..1: where the slow part hands off to the fast tail
+        kneeProgress: 0.18,       // fraction of the total lnZ traversed by the slow part (0.18 = ~18% — the tail does ~82%)
+        minStartRate: 0.010,      // minimum d(lnZ/lnZ0)/dt at t=0 — keeps the very first frames alive (not frozen)
         upswingTrigger: 0.15,     // membrane must climb at least this high (units) before we count "first upswing"
         upswingHysteresis: 0.02,  // and then drop this much from its peak to lock the upswing moment
         upswingFallbackTime: 6.0, // s inside PIERCED after which we force the transition (failsafe — unused now)
@@ -1383,7 +1386,15 @@ const PARAM_SCHEMA = [
         { key: 'funnelSharpness', min: 0.5, max: 8, step: 0.1 },
         { key: 'funnelRimFlat', min: 0, max: 0.9, step: 0.02 },
         { key: 'edgePadFrac', min: 0, max: 0.25, step: 0.01 },
+        { key: 'envelopeShrink', min: 0.3, max: 1.0, step: 0.02 },
         { key: 'totalDuration', min: 3, max: 20, step: 0.1 },
+        { key: 'knee', min: 0.2, max: 0.85, step: 0.01 },
+        { key: 'kneeProgress', min: 0.05, max: 0.6, step: 0.01 },
+        { key: 'minStartRate', min: 0, max: 0.1, step: 0.005 },
+        { key: 'edgePadPx', min: 0, max: 30, step: 1 },
+        { key: 'upswingTrigger', min: 0.02, max: 0.8, step: 0.01 },
+        { key: 'upswingHysteresis', min: 0, max: 0.2, step: 0.005 },
+        { key: 'upswingFallbackTime', min: 1, max: 15, step: 0.5 },
         { key: 'layoutLiftPx', min: -60, max: 60, step: 1, apply: applyLayoutLift },
         { key: 'logoRimWidthFrac', min: 0.5, max: 1, step: 0.01 },
         { key: 'logoRimTopFrac', min: 0, max: 0.5, step: 0.01 },
@@ -1810,6 +1821,17 @@ function applyZoom() {
         ? THREE.MathUtils.clamp(1 - Math.log(Math.max(Z, 1)) / Math.log(Z0), 0, 1)
         : 1;
     const C = { x: C0.x + (Mw.x - C0.x) * u, y: C0.y + (Mw.y - C0.y) * u };
+    // Live envelope clamp: never let the deepest point of the membrane slip
+    // below the bottom pad. depthLive (world units) tracks the real tension
+    // depth with instant attack / slow release (updated in updateZoom).
+    // The clamp fades out as Z→1 so the landing on the logo stays exact —
+    // by then the membrane has recoiled and settled anyway.
+    if (zoomCtl.pxPerUnitScreen) {
+        const depthPx = (zoomCtl.depthLive || 0) * zoomCtl.pxPerUnitScreen;
+        const wFade = THREE.MathUtils.smoothstep((Z - 1) / 0.15, 0, 1);
+        const maxCy = window.innerHeight - (zoomCtl.padPx || 0) - Z * depthPx * wFade;
+        if (C.y > maxCy) C.y = maxCy;
+    }
     const O = { x: C.x - Z * Mw.x, y: C.y - Z * Mw.y };
     const wrap = layoutWrap();
     if (wrap) wrap.style.transform = `translate(${O.x}px, ${O.y}px) scale(${Z})`;
@@ -1817,6 +1839,18 @@ function applyZoom() {
     const tau = { x: Z * tL.x + O.x, y: Z * tL.y + O.y };
     const w = window.innerWidth, h = window.innerHeight;
     camera.setViewOffset(w, h, -tau.x / sigma, -tau.y / sigma, w / sigma, h / sigma);
+}
+
+// Deepest free-vertex excursion below the rim plane, in world units (>= 0).
+function deepestFreeDepth() {
+    const { pos, pinned, count } = mem;
+    let minY = 0;
+    for (let i = 0; i < count; i++) {
+        if (pinned[i]) continue;
+        const y = pos[i * 3 + 1];
+        if (y < minY) minY = y;
+    }
+    return -minY;
 }
 
 function meanFreeY() {
@@ -1861,6 +1895,9 @@ function zoomInit() {
     // with no CSS zoom). pxPerUnitScreen = how many CSS-px correspond to 1
     // world unit at the membrane center under the base layout scale sL.
     const pxPerUnitScreen = zoomCtl.sL * zoomCtl.canvasPxPerUnit;
+    zoomCtl.pxPerUnitScreen = pxPerUnitScreen;
+    zoomCtl.padPx = Math.min(window.innerWidth, window.innerHeight) * CONFIG.intro.edgePadFrac;
+    zoomCtl.depthLive = 0;
     const R = CONFIG.membrane.radius;
     const rimFullWidthPx = 2 * R * pxPerUnitScreen;
     const rimHalfHeightPx = R * pxPerUnitScreen * Math.abs(Math.sin(
@@ -1887,18 +1924,35 @@ function zoomInit() {
 
 const smoothstep = (t) => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
 
-// Per-frame zoom driver. One motion, one S-curve: ln(Z) follows a single
-// smootherstep (5th-order Hermite) from lnZ0 at t=0 to 0 at t=T_total. No
-// phases, no switches, no visible kink — slow at the start (falling ball),
-// fastest in the middle (membrane peak), soft landing at the end.
+// Per-frame zoom driver. Two-part ln(Z) curve, C^1-glued at t=knee:
+//   [0..knee]: slow ramp — progress traversed = kneeProgress (small), starts
+//              at minStartRate so the frame lives from the first millisecond
+//   [knee..1]: fast tail — accelerates then decelerates into a soft landing
+function sCurveProgress(t, knee, kneeProg, minRate) {
+    if (t <= knee) {
+        const x = knee > 1e-6 ? t / knee : 1;
+        // Hermite 3x^2-2x^3 has zero slope at x=0; blend a linear term in to
+        // inject minStartRate so the very first frames are alive.
+        const hermite = 3 * x * x - 2 * x * x * x;
+        const p = minRate * x + (1 - minRate) * hermite;
+        return kneeProg * p;
+    }
+    const x = (t - knee) / Math.max(1e-6, 1 - knee);
+    const s = x * x * x * (x * (x * 6 - 15) + 10); // smootherstep tail — soft landing
+    return kneeProg + (1 - kneeProg) * s;
+}
+
 function updateZoom(dt) {
     const zc = zoomCtl, cfg = CONFIG.intro;
     if (zc.phase === 'idle') return;
+    // Track the real tension depth: instant attack, slow release (units/s).
+    const dNow = deepestFreeDepth();
+    const release = 1.2;
+    zc.depthLive = Math.max(dNow, (zc.depthLive || 0) - release * dt);
     zc.tGlobal += dt;
     const T = Math.max(0.5, cfg.totalDuration);
     const t = Math.min(1, zc.tGlobal / T);
-    // Smootherstep: 6t^5 - 15t^4 + 10t^3 (zero 1st AND 2nd derivative at both ends).
-    const s = t * t * t * (t * (t * 6 - 15) + 10);
+    const s = sCurveProgress(t, cfg.knee, cfg.kneeProgress, cfg.minStartRate);
     zc.lnZ = Math.max(0, zc.lnZ0 * (1 - s));
     zc.Z = Math.exp(zc.lnZ);
     if (t >= 1 && zc.phase !== 'landed') {
@@ -1942,9 +1996,17 @@ applyBallLook();
 buildMembrane();
 restartCycle();
 const gui = buildGUI();
-// Dev panel is hidden on this page unless ?gui=1 is in the URL.
+// Dev overlay: always on, fixed — out of the layout flow, doesn't affect body sizing.
 try {
-    if (new URLSearchParams(location.search).get('gui') !== '1') gui.domElement.style.display = 'none';
+    const g = gui.domElement;
+    g.style.position = 'fixed';
+    g.style.top = '0';
+    g.style.right = '0';
+    g.style.zIndex = '9999';
+    g.style.maxHeight = '100vh';
+    g.style.overflowY = 'auto';
+    g.style.pointerEvents = 'auto';
+    if (new URLSearchParams(location.search).get('gui') === '0') g.style.display = 'none';
 } catch (_) { /* noop */ }
 zoomInit(); // arms the zoom flight (measures geometry, computes the spawn height)
 requestAnimationFrame(tick);
