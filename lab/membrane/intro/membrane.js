@@ -2006,6 +2006,7 @@ try {
     g.style.maxHeight = '100vh';
     g.style.overflowY = 'auto';
     g.style.pointerEvents = 'auto';
+    gui.close(); // collapsed by default — one click opens; never covers the tagline (esp. portrait)
     if (new URLSearchParams(location.search).get('gui') === '0') g.style.display = 'none';
 } catch (_) { /* noop */ }
 zoomInit(); // arms the zoom flight (measures geometry, computes the spawn height)
