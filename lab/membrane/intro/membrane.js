@@ -189,7 +189,7 @@ const CONFIG = {
         layoutLiftPx: 11,         // lift of .center-block to balance the logo art's internal top padding
         logoRimWidthFrac: 0.84,   // rim ellipse width as a fraction of the logo image square
         logoRimTopFrac: 0.18,     // rim top edge as a fraction of the logo image square height
-        crossfade: true,          // fade the live canvas out and the static layout in as one motion
+        crossfade: false,         // OFF for tuning: both layers stay visible so you can compare canvas vs. logo layout live
         fadeDelay: 0.0,           // s after landing (Z=1) before the crossfade starts
         fadeDuration: 1.4,        // s of the crossfade
     },
@@ -1415,8 +1415,9 @@ const PARAM_SCHEMA = [
         { key: 'layoutLiftPx', min: -60, max: 60, step: 1, apply: applyLayoutLift },
         { key: 'logoRimWidthFrac', min: 0.5, max: 1, step: 0.01 },
         { key: 'logoRimTopFrac', min: 0, max: 0.5, step: 0.01 },
-        { key: 'fadeDelay', min: 0, max: 5, step: 0.1 },
-        { key: 'fadeDuration', min: 0.2, max: 5, step: 0.1 },
+        { key: 'crossfade', tip: 'When ON: after landing the canvas fades OUT while the static logo layout fades IN. When OFF (tuning mode): the logo layout is visible from the start so you can align the camera curve against the final target.' },
+        { key: 'fadeDelay', min: 0, max: 5, step: 0.1, tip: 'Seconds to wait after landing (Z=1) before the crossfade starts. Only used when crossfade is ON.' },
+        { key: 'fadeDuration', min: 0.2, max: 5, step: 0.1, tip: 'Length of the crossfade (seconds). Only used when crossfade is ON.' },
     ] },
 ];
 
@@ -1907,7 +1908,9 @@ function zoomInit() {
     canvas.style.transition = 'none';
     canvas.style.opacity = '1';
     const block = document.querySelector('.center-block');
-    if (block) { block.style.transition = 'none'; block.style.opacity = '0'; }
+    // When crossfade is off, the DOM layout (logo + text) is visible from the start
+    // so you can tune the camera curve against the final target directly.
+    if (block) { block.style.transition = 'none'; block.style.opacity = CONFIG.intro.crossfade ? '0' : '1'; }
     applyLayoutLift();
     if (!measureBaseGeometry()) { zoomCtl.phase = 'idle'; return; }
     // Measure geometry needed for the auto-fit envelope, in world (unzoomed) px.
