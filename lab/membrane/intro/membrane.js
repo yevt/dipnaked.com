@@ -112,7 +112,7 @@ const CONFIG = {
         radius: 0.10,
         startHeight: 3.2,         // spawn height above the film (along +normal)
         speed: 0.55,              // units/s along -normal (slow, comet-like)
-        exitDistance: 4.5,        // despawn this far below the film
+        exitDistance: 10.0,       // despawn this far below the film — large enough so the ball keeps falling until it's clearly off-screen
         color: '#33dcf0',         // matches the sphere as drawn in the logo art
     },
     // rupture.maxDepth is a hard failsafe. With tougher material we need more room to stretch
@@ -171,11 +171,17 @@ const CONFIG = {
         oneShot: true,            // after the ball leaves the frame, block any new drop — restart requires the user
         // -- self-calibrating continuous zoom-out (see updateZoom for the math) --
         edgePadFrac: 0.03,        // safety pad (fraction of the SHORT viewport side) around the physics envelope
-        envelopeShrink: 0.72,     // fraction of rupture.maxDepth actually used at Z0 (the deepest real excursion is ~70-75% of the failsafe)
-        totalDuration: 11.0,      // s of the whole ln(Z) curve, from t=0 (start) to Z=1 (landed)
-        knee: 0.55,               // 0..1: where the slow part hands off to the fast tail
-        kneeProgress: 0.18,       // fraction of the total lnZ traversed by the slow part (0.18 = ~18% — the tail does ~82%)
-        minStartRate: 0.010,      // minimum d(lnZ/lnZ0)/dt at t=0 — keeps the very first frames alive (not frozen)
+        envelopeShrink: 0.62,     // fraction of rupture.maxDepth used to size the start envelope (smaller = less vertical stretch)
+        // === CAMERA CURVE ===
+        // Progress p(t) is normalized 0..1: p=0 at t=0 (camera at Z0, farthest), p=1 at end (Z=1, on the logo).
+        // Two joined pieces:
+        //   [0, rampDuration]: LINEAR ramp — p grows at rampSlope per second (very gentle start)
+        //   [rampDuration, rampDuration+sDuration]: SYMMETRIC S-curve from where the ramp left off to p=1
+        // Total intro duration = rampDuration + sDuration. The S-curve always finishes at p=1.
+        rampDuration: 3.0,        // s — how long the very slow linear ramp lasts (the "held" first part)
+        rampSlope: 0.02,          // p/s during the ramp (0.02 ⇒ 6% of the way covered in 3s)
+        sDuration: 8.0,           // s — how long the symmetric S-curve tail lasts (must end at p=1)
+        sEase: 3,                 // 2..6 — ease exponent (2=quadratic, 3=cubic, 5=smootherstep-like)
         upswingTrigger: 0.15,     // membrane must climb at least this high (units) before we count "first upswing"
         upswingHysteresis: 0.02,  // and then drop this much from its peak to lock the upswing moment
         upswingFallbackTime: 6.0, // s inside PIERCED after which we force the transition (failsafe — unused now)
@@ -434,10 +440,15 @@ function buildMembrane() {
     const indexArr = new Uint32Array(tris.length * 3);
     geometry.setIndex(new THREE.BufferAttribute(indexArr, 1));
 
-    // Per-fragment darkening: the nonlinear curve is applied after interpolation,
-    // giving a smooth logo-like fade even across large stretched triangles.
+    // Physically: the same non-linear curve that used to DARKEN the stretched
+    // fabric now DROPS ITS ALPHA. On a dark background this reads the same as
+    // darkening (transparent × black = black), but the ball inside the funnel
+    // shows through the thin, stretched film instead of being lost in a black
+    // core. `darkenDepth/Power/Strength` are re-used as alpha-drop controls.
     const material = new THREE.ShaderMaterial({
         side: THREE.DoubleSide,
+        transparent: true,
+        depthWrite: false,  // let the ball render through without z-fighting
         uniforms: {
             uColor: { value: new THREE.Color(CONFIG.look.baseColor) },
             uBrightness: { value: CONFIG.look.brightness },
@@ -460,12 +471,14 @@ function buildMembrane() {
             uniform float uDarkenStrength;
             varying float vDepth;
             void main() {
+                // t: 0 at rest, 1 fully stretched. Alpha follows (1 - t*strength).
                 float t = pow(clamp(vDepth / uDarkenDepth, 0.0, 1.0), uDarkenPower);
-                float k = 1.0 - t * uDarkenStrength;
-                gl_FragColor = vec4(uColor * uBrightness * k, 1.0);
+                float a = 1.0 - t * uDarkenStrength;
+                gl_FragColor = vec4(uColor * uBrightness, a);
             }`,
     });
     const mesh = new THREE.Mesh(geometry, material);
+    mesh.renderOrder = 1; // draw the membrane AFTER the ball so it blends over
     tiltGroup.add(mesh);
 
     mem = { R, S, count, home, pos, prev, ringOf, pinned, constraints, structCount, vertexCons,
@@ -515,7 +528,11 @@ function rebuildIndex() {
 // Ball
 // ----------------------------------------------------------------------------
 const ballMat = new THREE.MeshBasicMaterial({ color: CONFIG.ball.color });
+// Ball is drawn BEFORE the transparent membrane and the membrane blends over.
+// Where the film is stretched (low alpha) the ball shows through; where it is
+// dense (alpha near 1) the film covers the ball, exactly like a real latex.
 const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 24), ballMat);
+ballMesh.renderOrder = 0;
 tiltGroup.add(ballMesh);
 ballMesh.visible = false;
 const ballPos = new THREE.Vector3(); // local (tiltGroup) space
@@ -1344,7 +1361,7 @@ const PARAM_SCHEMA = [
         { key: 'radius', min: 0.02, max: 0.5, step: 0.01, apply: applyBallLook },
         { key: 'startHeight', min: 0.5, max: 8, step: 0.1 },
         { key: 'speed', min: 0.05, max: 3, step: 0.01 },
-        { key: 'exitDistance', min: 1, max: 10, step: 0.1 },
+        { key: 'exitDistance', min: 1, max: 20, step: 0.5, tip: 'World-units below the membrane at which the ball is despawned. Larger = it keeps falling further past the bottom of the screen before disappearing.' },
         { key: 'color', color: true, apply: applyBallLook },
     ] },
     { id: 'rupture', title: 'rupture / healing', obj: () => CONFIG.rupture, params: [
@@ -1385,16 +1402,16 @@ const PARAM_SCHEMA = [
         { key: 'funnelNeckRadius', min: 0, max: 0.5, step: 0.01 },
         { key: 'funnelSharpness', min: 0.5, max: 8, step: 0.1 },
         { key: 'funnelRimFlat', min: 0, max: 0.9, step: 0.02 },
-        { key: 'edgePadFrac', min: 0, max: 0.25, step: 0.01 },
-        { key: 'envelopeShrink', min: 0.3, max: 1.0, step: 0.02 },
-        { key: 'totalDuration', min: 3, max: 20, step: 0.1 },
-        { key: 'knee', min: 0.2, max: 0.85, step: 0.01 },
-        { key: 'kneeProgress', min: 0.05, max: 0.6, step: 0.01 },
-        { key: 'minStartRate', min: 0, max: 0.1, step: 0.005 },
-        { key: 'edgePadPx', min: 0, max: 30, step: 1 },
-        { key: 'upswingTrigger', min: 0.02, max: 0.8, step: 0.01 },
-        { key: 'upswingHysteresis', min: 0, max: 0.2, step: 0.005 },
-        { key: 'upswingFallbackTime', min: 1, max: 15, step: 0.5 },
+        { key: 'edgePadFrac', min: 0, max: 0.25, step: 0.01, tip: 'Safety pad around the physics envelope, as a fraction of the SHORT viewport side. Larger = the whole tension cone sits further from the screen edges.' },
+        { key: 'envelopeShrink', min: 0.3, max: 1.0, step: 0.02, tip: 'Fraction of rupture.maxDepth used to size the start envelope. Smaller = camera starts closer, membrane visually stretches LESS by the end.' },
+        { key: 'rampDuration', min: 0, max: 8, step: 0.1, tip: 'How long (seconds) the very slow LINEAR ramp lasts at the start of the intro. Longer = the camera “holds” in place at the deepest zoom.' },
+        { key: 'rampSlope', min: 0, max: 0.15, step: 0.005, tip: 'Progress-per-second during the ramp. 0.02 means only ~6% of the total motion is covered in 3 s. Bigger = the ramp is less pologe.' },
+        { key: 'sDuration', min: 1, max: 15, step: 0.1, tip: 'How long (seconds) the symmetric S-curve tail lasts. The S ALWAYS ends on the logo, so this only reshapes the tail’s pace.' },
+        { key: 'sEase', min: 2, max: 6, step: 1, tip: 'Symmetric ease exponent for the S-curve. 2 = quadratic in/out (softest), 3 = cubic (default), 5 = smootherstep-like (steepest middle).' },
+        { key: 'edgePadPx', min: 0, max: 30, step: 1, tip: 'How far below the top viewport edge the ball spawns, in CSS pixels. 1 = just barely visible at the very first frame.' },
+        { key: 'upswingTrigger', min: 0.02, max: 0.8, step: 0.01, tip: 'Membrane must climb at least this many world-units after rupture before the “first upswing” moment is registered (used by the timing bookkeeping; safe to leave alone).' },
+        { key: 'upswingHysteresis', min: 0, max: 0.2, step: 0.005, tip: 'The membrane must drop back by this many units from its peak to lock the upswing moment.' },
+        { key: 'upswingFallbackTime', min: 1, max: 15, step: 0.5, tip: 'Failsafe: if the upswing is never detected, this many seconds after rupture forces the transition.' },
         { key: 'layoutLiftPx', min: -60, max: 60, step: 1, apply: applyLayoutLift },
         { key: 'logoRimWidthFrac', min: 0.5, max: 1, step: 0.01 },
         { key: 'logoRimTopFrac', min: 0, max: 0.5, step: 0.01 },
@@ -1566,6 +1583,10 @@ function buildGUI() {
             if (p.apply) ctrl.onChange(p.apply);
             if (p.rebuild) ctrl.onFinishChange(restartAll);
             if (p.applyFinish) ctrl.onFinishChange(p.applyFinish);
+            if (p.tip && ctrl.domElement) { // native browser tooltip — hover the row for context
+                ctrl.domElement.title = p.tip;
+                if (ctrl.$name) ctrl.$name.title = p.tip;
+            }
             if (sec.markCustom) {
                 ctrl.onChange((v) => {
                     CONFIG.materialPreset = 'custom';
@@ -1924,22 +1945,31 @@ function zoomInit() {
 
 const smoothstep = (t) => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
 
-// Per-frame zoom driver. Two-part ln(Z) curve, C^1-glued at t=knee:
-//   [0..knee]: slow ramp — progress traversed = kneeProgress (small), starts
-//              at minStartRate so the frame lives from the first millisecond
-//   [knee..1]: fast tail — accelerates then decelerates into a soft landing
-function sCurveProgress(t, knee, kneeProg, minRate) {
-    if (t <= knee) {
-        const x = knee > 1e-6 ? t / knee : 1;
-        // Hermite 3x^2-2x^3 has zero slope at x=0; blend a linear term in to
-        // inject minStartRate so the very first frames are alive.
-        const hermite = 3 * x * x - 2 * x * x * x;
-        const p = minRate * x + (1 - minRate) * hermite;
-        return kneeProg * p;
+// Symmetric ease-in-out from p0 to 1 over x∈[0,1], with adjustable exponent.
+// Both endpoints match slope on their own side (S-shape), and starting slope
+// at x=0 is 0 — which is what makes the join to the ramp continuous only if
+// the ramp's endpoint slope is compensated. We compensate by remapping the
+// S-curve's x so that its instantaneous rate at x=0 equals rampSlope.
+function symmetricEase(x, e) {
+    // Piecewise symmetric ease: 2^(e-1) * x^e  for x<0.5,  1 - 2^(e-1)*(1-x)^e  for x>=0.5.
+    // e=2 -> quadratic in/out, e=3 -> cubic, e=5 -> near-smootherstep.
+    x = Math.max(0, Math.min(1, x));
+    const k = Math.pow(2, e - 1);
+    return x < 0.5 ? k * Math.pow(x, e) : 1 - k * Math.pow(1 - x, e);
+}
+
+// Progress at time t, per the camera-curve model documented above.
+function cameraProgress(t, cfg) {
+    const rampT = Math.max(0, cfg.rampDuration);
+    const sT = Math.max(0.01, cfg.sDuration);
+    if (t <= rampT) {
+        return Math.max(0, Math.min(1, cfg.rampSlope * t));
     }
-    const x = (t - knee) / Math.max(1e-6, 1 - knee);
-    const s = x * x * x * (x * (x * 6 - 15) + 10); // smootherstep tail — soft landing
-    return kneeProg + (1 - kneeProg) * s;
+    const pRampEnd = Math.max(0, Math.min(1, cfg.rampSlope * rampT));
+    const x = Math.min(1, (t - rampT) / sT);
+    // Symmetric ease from pRampEnd to 1.
+    const eased = symmetricEase(x, cfg.sEase);
+    return pRampEnd + (1 - pRampEnd) * eased;
 }
 
 function updateZoom(dt) {
@@ -1950,11 +1980,11 @@ function updateZoom(dt) {
     const release = 1.2;
     zc.depthLive = Math.max(dNow, (zc.depthLive || 0) - release * dt);
     zc.tGlobal += dt;
-    const T = Math.max(0.5, cfg.totalDuration);
-    const t = Math.min(1, zc.tGlobal / T);
-    const s = sCurveProgress(t, cfg.knee, cfg.kneeProgress, cfg.minStartRate);
-    zc.lnZ = Math.max(0, zc.lnZ0 * (1 - s));
+    const T = Math.max(0.5, (cfg.rampDuration || 0) + (cfg.sDuration || 0));
+    const p = cameraProgress(zc.tGlobal, cfg);
+    zc.lnZ = Math.max(0, zc.lnZ0 * (1 - p));
     zc.Z = Math.exp(zc.lnZ);
+    const t = Math.min(1, zc.tGlobal / T);
     if (t >= 1 && zc.phase !== 'landed') {
         zc.lnZ = 0; zc.Z = 1;
         zc.phase = 'landed';
