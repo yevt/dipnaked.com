@@ -109,11 +109,11 @@ const CONFIG = {
     materialPreset: 'latex',
     material: { ...MATERIALS.latex }, // live-editable copy (edited sliders → "custom")
     ball: {
-        radius: 0.10,
+        radius: 0.18,             // bigger — reads clearly through the transparent film
         startHeight: 3.2,         // spawn height above the film (along +normal)
-        speed: 0.55,              // units/s along -normal (slow, comet-like)
+        speed: 0.35,              // units/s along -normal (slow, comet-like) — keeps the ball in the funnel longer
         exitDistance: 10.0,       // despawn this far below the film — large enough so the ball keeps falling until it's clearly off-screen
-        color: '#33dcf0',         // matches the sphere as drawn in the logo art
+        color: '#8df4ff',         // lighter than the film so it reads on top of the dark tip
     },
     // rupture.maxDepth is a hard failsafe. With tougher material we need more room to stretch
     // before the failsafe fires or the depth-limit tears prematurely.
@@ -140,8 +140,9 @@ const CONFIG = {
         baseColor: '#28d5e9',     // film color at rest / at the rim — matches the logo art
         darkenDepth: 1.9,         // deflection at which darkening saturates
         darkenPower: 0.7,         // curve exponent (higher = darkening stays near tip)
-        darkenStrength: 0.97,     // 0..1 max darkening at full stretch
+        darkenStrength: 1.0,      // 0..1 max darkening / alpha-drop at full stretch
         brightness: 1.0,          // global film brightness multiplier
+        alphaMode: 1,             // 0 = RGB darken (soft dark-blue gradient), 1 = alpha drop (film goes transparent so the ball shows through)
     },
     timing: {
         timeScale: 1.0,           // global slow-motion factor
@@ -455,6 +456,7 @@ function buildMembrane() {
             uDarkenDepth: { value: CONFIG.look.darkenDepth },
             uDarkenPower: { value: CONFIG.look.darkenPower },
             uDarkenStrength: { value: CONFIG.look.darkenStrength },
+            uAlphaMode: { value: CONFIG.look.alphaMode },
         },
         vertexShader: /* glsl */`
             attribute float aDepth;
@@ -469,12 +471,15 @@ function buildMembrane() {
             uniform float uDarkenDepth;
             uniform float uDarkenPower;
             uniform float uDarkenStrength;
+            uniform float uAlphaMode; // 0 = RGB darken (film stays opaque, gets darker), 1 = alpha drop (film goes transparent)
             varying float vDepth;
             void main() {
-                // t: 0 at rest, 1 fully stretched. Alpha follows (1 - t*strength).
+                // t: 0 at rest, 1 fully stretched.
                 float t = pow(clamp(vDepth / uDarkenDepth, 0.0, 1.0), uDarkenPower);
-                float a = 1.0 - t * uDarkenStrength;
-                gl_FragColor = vec4(uColor * uBrightness, a);
+                float fade = 1.0 - t * uDarkenStrength;
+                vec3 col = uColor * uBrightness * mix(fade, 1.0, uAlphaMode);
+                float a = mix(1.0, fade, uAlphaMode);
+                gl_FragColor = vec4(col, a);
             }`,
     });
     const mesh = new THREE.Mesh(geometry, material);
@@ -535,7 +540,19 @@ const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 24), ballMat);
 ballMesh.renderOrder = 0;
 tiltGroup.add(ballMesh);
 ballMesh.visible = false;
+// Additive halo attached to the ball — makes it pop even through a thick tip of the film.
+// Child of ballMesh so it follows position/scale automatically.
+const haloMat = new THREE.MeshBasicMaterial({ color: '#4ee6ff', transparent: true,
+    opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false });
+const haloMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), haloMat);
+haloMesh.scale.setScalar(1.7); // 1.7× the ball's own radius (ball scales this whole subtree)
+haloMesh.renderOrder = 0; // drawn in the transparent queue before the membrane (renderOrder 1)
+ballMesh.add(haloMesh);
 const ballPos = new THREE.Vector3(); // local (tiltGroup) space
+// Debug handles: window.__mem.ballMesh / ballMat / ballPos / camera / CONFIG / THREE
+window.__mem = { get ballMesh(){return ballMesh;}, get ballMat(){return ballMat;},
+                 get ballPos(){return ballPos;}, get camera(){return camera;},
+                 get CONFIG(){return CONFIG;}, get THREE(){return THREE;} };
 
 function applyBallLook() {
     ballMesh.scale.setScalar(CONFIG.ball.radius);
@@ -1231,6 +1248,7 @@ function updateColors() {
     material.uniforms.uDarkenDepth.value = CONFIG.look.darkenDepth;
     material.uniforms.uDarkenPower.value = CONFIG.look.darkenPower;
     material.uniforms.uDarkenStrength.value = CONFIG.look.darkenStrength;
+    material.uniforms.uAlphaMode.value = CONFIG.look.alphaMode;
 }
 
 // ----------------------------------------------------------------------------
@@ -1383,11 +1401,12 @@ const PARAM_SCHEMA = [
         { key: 'recoilNoise', min: 0, max: 1, step: 0.01 },
     ] },
     { id: 'look', title: 'look', obj: () => CONFIG.look, params: [
-        { key: 'baseColor', color: true },
-        { key: 'darkenDepth', min: 0.2, max: 4, step: 0.05 },
-        { key: 'darkenPower', min: 0.3, max: 4, step: 0.05 },
-        { key: 'darkenStrength', min: 0, max: 1, step: 0.01 },
-        { key: 'brightness', min: 0.2, max: 2, step: 0.01 },
+        { key: 'baseColor', color: true, tip: 'Base film color at rest (rim / unstretched areas).' },
+        { key: 'darkenDepth', min: 0.2, max: 4, step: 0.05, tip: 'Vertex depth (in world units) at which the darken/alpha curve reaches its peak. Larger = the effect saturates only in the deepest part of the funnel.' },
+        { key: 'darkenPower', min: 0.3, max: 4, step: 0.05, tip: 'Curve exponent. >1 keeps the effect concentrated near the tip; <1 spreads it toward the rim.' },
+        { key: 'darkenStrength', min: 0, max: 1, step: 0.01, tip: 'Max amount of darken (mode 0) or transparency (mode 1) at full stretch. 1.0 = fully dark / fully transparent at the tip.' },
+        { key: 'brightness', min: 0.2, max: 2, step: 0.01, tip: 'Global film brightness multiplier applied to baseColor.' },
+        { key: 'alphaMode', min: 0, max: 1, step: 1, tip: '0 = RGB darken (film stays opaque, gets darker toward the tip — the classic logo look). 1 = alpha drop (film becomes TRANSPARENT toward the tip so the ball shows through). Switch live to compare.' },
     ] },
     { id: 'timing', title: 'timing', obj: () => CONFIG.timing, params: [
         { key: 'timeScale', min: 0.05, max: 3, step: 0.05 },
