@@ -113,7 +113,7 @@ const CONFIG = {
         startHeight: 3.2,         // spawn height above the film (along +normal)
         speed: 0.55,              // units/s along -normal (slow, comet-like)
         exitDistance: 4.5,        // despawn this far below the film
-        color: '#2ec8e0',
+        color: '#33dcf0',         // matches the sphere as drawn in the logo art
     },
     // rupture.maxDepth is a hard failsafe. With tougher material we need more room to stretch
     // before the failsafe fires or the depth-limit tears prematurely.
@@ -137,7 +137,7 @@ const CONFIG = {
         recoilNoise: 0.35,        // rupture impulse noise 0..1
     },
     look: {
-        baseColor: '#2ec8e0',     // film color at rest / at the rim
+        baseColor: '#28d5e9',     // film color at rest / at the rim — matches the logo art
         darkenDepth: 1.9,         // deflection at which darkening saturates
         darkenPower: 0.7,         // curve exponent (higher = darkening stays near tip)
         darkenStrength: 0.97,     // 0..1 max darkening at full stretch
@@ -170,18 +170,16 @@ const CONFIG = {
         funnelRimFlat: 0.22,      // fraction of radius that stays near-flat before the drop begins
         oneShot: true,            // after the ball leaves the frame, block any new drop — restart requires the user
         // -- self-calibrating continuous zoom-out (see updateZoom for the math) --
-        edgePadFrac: 0.08,        // safety pad above/below the physics envelope, as a fraction of viewport height
-        slowRate: 0.08,           // exponential shrink rate (log-Z per s) BEFORE the first upswing — close to the tail's average rate
-        finalDuration: 6.5,       // s of the tail from the upswing moment to Z=1 (soft cubic-Hermite landing)
+        edgePadFrac: 0.03,        // safety pad (fraction of the SHORT viewport side) around the physics envelope
+        totalDuration: 11.0,      // s of the whole ln(Z) S-curve, from t=0 (start) to Z=1 (landed)
         upswingTrigger: 0.15,     // membrane must climb at least this high (units) before we count "first upswing"
         upswingHysteresis: 0.02,  // and then drop this much from its peak to lock the upswing moment
-        upswingFallbackTime: 6.0, // s inside PIERCED after which we force the transition (failsafe)
-        startCenterY: 0.32,       // rim center vertical position at start (fraction of viewport height) — low enough to give room under the rim for the deep tension
-        edgePadPx: 1,             // ball spawn: how many px above the top screen edge it starts
+        upswingFallbackTime: 6.0, // s inside PIERCED after which we force the transition (failsafe — unused now)
+        edgePadPx: 1,             // ball spawn: how many px BELOW the top screen edge (visible immediately)
         layoutLiftPx: 11,         // lift of .center-block to balance the logo art's internal top padding
         logoRimWidthFrac: 0.84,   // rim ellipse width as a fraction of the logo image square
         logoRimTopFrac: 0.18,     // rim top edge as a fraction of the logo image square height
-        crossfade: true,          // fade the live canvas out and the static logo in as one motion
+        crossfade: true,          // fade the live canvas out and the static layout in as one motion
         fadeDelay: 0.0,           // s after landing (Z=1) before the crossfade starts
         fadeDuration: 1.4,        // s of the crossfade
     },
@@ -1384,9 +1382,7 @@ const PARAM_SCHEMA = [
         { key: 'funnelSharpness', min: 0.5, max: 8, step: 0.1 },
         { key: 'funnelRimFlat', min: 0, max: 0.9, step: 0.02 },
         { key: 'edgePadFrac', min: 0, max: 0.25, step: 0.01 },
-        { key: 'slowRate', min: 0, max: 0.5, step: 0.01 },
-        { key: 'finalDuration', min: 0.5, max: 12, step: 0.1 },
-        { key: 'startCenterY', min: 0.2, max: 0.8, step: 0.01 },
+        { key: 'totalDuration', min: 3, max: 20, step: 0.1 },
         { key: 'layoutLiftPx', min: -60, max: 60, step: 1, apply: applyLayoutLift },
         { key: 'logoRimWidthFrac', min: 0.5, max: 1, step: 0.01 },
         { key: 'logoRimTopFrac', min: 0, max: 0.5, step: 0.01 },
@@ -1760,32 +1756,42 @@ function canvasPxPerUnitAtCenter() {
     return Math.abs((p0.y - p1.y) / 2 * window.innerHeight);
 }
 
-// Choose Z0 so the entire motion envelope fits in the viewport, WITHOUT letting
-// any part of the deep tension or the rim exit the screen — with a symmetric
-// safety pad above/below. Geometry, in world (unzoomed) px around the rim
-// center Mw at startCenterY of the viewport height:
-//   above the rim center we need: rimHalfHeightWw           (top of the rim)
-//   below the rim center we need: envDeepPx                 (deepest tension)
-// Screen budget on those two sides:
-//   above:  Z * rimHalfHeightWw <= startCenterY * availPx
-//   below:  Z * envDeepPx        <= (1 - startCenterY) * availPx
-function computeStartZoom(rimHalfHeightWw, envDeepPx) {
+// Choose Z0 and the on-screen rim-center Y so the entire motion envelope fits
+// in the viewport with a small symmetric pad on the constraining side. Handles
+// landscape and portrait honestly:
+//
+//   Horizontal constraint:  Z * rimHalfWidthWw <= (viewport_w / 2 - padPx)
+//   Vertical constraint:    Z * (rimHalfHeightWw + envDeepPx) <= viewport_h - 2 padPx
+//
+// Once Z0 is picked, rim center Y is placed so the deep tension exactly clears
+// the bottom pad; the rim top sits somewhere above with headroom for the ball.
+function computeStartFit(rimHalfWidthWw, rimHalfHeightWw, envDeepPx) {
     const cfg = CONFIG.intro;
-    const vh = window.innerHeight;
-    const availPx = vh * (1 - 2 * cfg.edgePadFrac);
-    const Zabove = (cfg.startCenterY * availPx) / Math.max(1, rimHalfHeightWw);
-    const Zbelow = ((1 - cfg.startCenterY) * availPx) / Math.max(1, envDeepPx);
-    return Math.max(1, Math.min(Zabove, Zbelow));
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const shortSide = Math.min(vw, vh);
+    const padPx = shortSide * cfg.edgePadFrac;
+    const availW = vw - 2 * padPx;
+    const availH = vh - 2 * padPx;
+    const Zwidth = availW / (2 * Math.max(1, rimHalfWidthWw));
+    const Zheight = availH / Math.max(1, rimHalfHeightWw + envDeepPx);
+    const Z = Math.max(1, Math.min(Zwidth, Zheight));
+    // Vertical placement: rim center sits so the bottom of the physics envelope
+    // ends at (vh - padPx). That leaves the maximum possible room above the rim
+    // for the falling ball.
+    const cy = vh - padPx - Z * envDeepPx;
+    return { Z, cy };
 }
 
-// Solve for the spawn height that puts the ball edgePadPx above the top screen
-// edge on the very first frame at start zoom Z0.
+// Solve for the spawn height that puts the ball's BOTTOM edge exactly edgePadPx
+// BELOW the top of the viewport at start zoom Z0 — the ball's top edge just
+// clips the top of the screen, its full circle is visible immediately.
 function computeSpawnHeight() {
     const { Z0, sL, tL, C0, Mw } = zoomCtl;
     const sigma = Z0 * sL;
     const tauY = Z0 * tL.y + (C0.y - Z0 * Mw.y);
     const pxPerUnit = Math.abs(screenYAtHeight(0, sigma, tauY) - screenYAtHeight(1, sigma, tauY));
-    const targetY = -(CONFIG.ball.radius * pxPerUnit + CONFIG.intro.edgePadPx);
+    // Ball center at screen y = edgePadPx + ballRadiusPx (ball fully inside viewport).
+    const targetY = CONFIG.intro.edgePadPx + CONFIG.ball.radius * pxPerUnit;
     let lo = 0.2, hi = 60;
     for (let i = 0; i < 48; i++) {
         const mid = (lo + hi) / 2;
@@ -1825,14 +1831,14 @@ function scheduleCrossfade() {
     if (!CONFIG.intro.crossfade) return;
     clearTimeout(zoomCtl.fadeTimer);
     const canvas = renderer.domElement;
-    const logo = document.getElementById('logo-img');
+    const block = document.querySelector('.center-block');
     zoomCtl.fadeTimer = setTimeout(() => {
         const dur = CONFIG.intro.fadeDuration;
         canvas.style.transition = `opacity ${dur}s ease-out`;
         canvas.style.opacity = '0';
-        if (logo) {
-            logo.style.transition = `opacity ${dur}s ease-in`;
-            logo.style.opacity = '1';
+        if (block) {
+            block.style.transition = `opacity ${dur}s ease-in`;
+            block.style.opacity = '1';
         }
     }, CONFIG.intro.fadeDelay * 1000);
 }
@@ -1843,8 +1849,8 @@ function zoomInit() {
     const canvas = renderer.domElement;
     canvas.style.transition = 'none';
     canvas.style.opacity = '1';
-    const logo = document.getElementById('logo-img');
-    if (logo) { logo.style.transition = 'none'; logo.style.opacity = '0'; }
+    const block = document.querySelector('.center-block');
+    if (block) { block.style.transition = 'none'; block.style.opacity = '0'; }
     applyLayoutLift();
     if (!measureBaseGeometry()) { zoomCtl.phase = 'idle'; return; }
     // Measure geometry needed for the auto-fit envelope, in world (unzoomed) px.
@@ -1853,12 +1859,16 @@ function zoomInit() {
         THREE.MathUtils.degToRad(CONFIG.scene.membraneTilt)
     ));
     const rimHalfHeightWw = zoomCtl.sL * halfRimHeightPx;
+    // Rim full width in world (unzoomed) px — tilted rim projects to an ellipse
+    // whose full width is the rim diameter (2R * pxPerUnit).
+    const rimHalfWidthWw = zoomCtl.sL * zoomCtl.canvasPxPerUnit * CONFIG.membrane.radius;
     // Physics envelope: the ball can drag the center down to CONFIG.rupture.maxDepth (units).
     // In canvas px that is maxDepth * canvasPxPerUnit; in world px it becomes:
     const envDeepWw = zoomCtl.sL * zoomCtl.canvasPxPerUnit * CONFIG.rupture.maxDepth;
     const vw = window.innerWidth, vh = window.innerHeight;
-    zoomCtl.Z0 = computeStartZoom(rimHalfHeightWw, envDeepWw);
-    zoomCtl.C0 = { x: vw / 2, y: vh * CONFIG.intro.startCenterY };
+    const fit = computeStartFit(rimHalfWidthWw, rimHalfHeightWw, envDeepWw);
+    zoomCtl.Z0 = fit.Z;
+    zoomCtl.C0 = { x: vw / 2, y: fit.cy };
     zoomCtl.lnZ0 = Math.log(zoomCtl.Z0);
     zoomCtl.lnZ = zoomCtl.lnZ0;
     zoomCtl.Z = zoomCtl.Z0;
@@ -1875,66 +1885,24 @@ function zoomInit() {
 
 const smoothstep = (t) => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
 
-// Per-frame zoom driver.
-//
-// One motion, one speed change:
-//   - v_slow  = fixed exponential shrink rate (log-Z per second) BEFORE the first
-//               upswing of the torn film. Small — keeps the physics feel calm.
-//   - v_fast  = the rate that lands us at Z=1 exactly finalDuration seconds after
-//               the upswing (computed from the current lnZ at that moment).
-// The transition between v_slow and v_fast is smoothed by a cubic smoothstep over
-// `blendWindow` seconds centered on the upswing moment — no visible kink, no second
-// gear change: the velocity varies continuously across the whole flight.
+// Per-frame zoom driver. One motion, one S-curve: ln(Z) follows a single
+// smootherstep (5th-order Hermite) from lnZ0 at t=0 to 0 at t=T_total. No
+// phases, no switches, no visible kink — slow at the start (falling ball),
+// fastest in the middle (membrane peak), soft landing at the end.
 function updateZoom(dt) {
     const zc = zoomCtl, cfg = CONFIG.intro;
-    if (zc.phase === 'idle' || zc.phase === 'landed') return;
+    if (zc.phase === 'idle') return;
     zc.tGlobal += dt;
-
-    // Track the first upswing: after the tear the free membrane climbs; we take
-    // the first frame where its mean Y has dropped a hair from its running peak.
-    if (phase === Phase.PIERCED) {
-        if (zc.tPierced < 0) zc.tPierced = zc.tGlobal;
-        if (zc.tUpswing < 0) {
-            const my = meanFreeY();
-            if (my > zc.peakY) zc.peakY = my;
-            if (my > cfg.upswingTrigger) zc.rising = true;
-            const dropped = zc.rising && my < zc.peakY - cfg.upswingHysteresis;
-            const timedOut = (zc.tGlobal - zc.tPierced) > cfg.upswingFallbackTime;
-            if (dropped || timedOut) zc.tUpswing = zc.tGlobal;
-        }
-    }
-
-    // Before the upswing: constant slow drift down in ln(Z).
-    if (zc.tUpswing < 0) {
-        zc.lnZ = Math.max(0, zc.lnZ - cfg.slowRate * dt);
-        zc.Z = Math.exp(zc.lnZ);
-        applyZoom();
-        return;
-    }
-
-    // At the very moment we detect the upswing, freeze the cubic-Hermite tail
-    // so that its slope at tau=0 equals the pre-upswing slow rate — that is
-    // what removes the visible "step". The curve goes from lnZ0 at tau=0 to 0
-    // at tau=1 with zero slope at tau=1 (soft landing).
-    if (!zc.tail) {
-        const lnZ0 = zc.lnZ;
-        const D = Math.max(0.1, cfg.finalDuration);
-        // a = d(lnZ)/d(tau) at tau=0, normalized by lnZ0. Negative because lnZ decreases.
-        const rawA = -cfg.slowRate * D / Math.max(1e-6, lnZ0);
-        // Cap |a| so the cubic stays monotone (a in [-3, 0] gives no overshoot).
-        const a = Math.max(-3, Math.min(0, rawA));
-        const b = -(3 + 2 * a);
-        const c = 2 + a;
-        zc.tail = { lnZ0, D, a, b, c };
-    }
-    const { lnZ0, D, a, b, c } = zc.tail;
-    const tau = Math.min(1, (zc.tGlobal - zc.tUpswing) / D);
-    const f = 1 + a * tau + b * tau * tau + c * tau * tau * tau;
-    zc.lnZ = Math.max(0, lnZ0 * f);
+    const T = Math.max(0.5, cfg.totalDuration);
+    const t = Math.min(1, zc.tGlobal / T);
+    // Smootherstep: 6t^5 - 15t^4 + 10t^3 (zero 1st AND 2nd derivative at both ends).
+    const s = t * t * t * (t * (t * 6 - 15) + 10);
+    zc.lnZ = Math.max(0, zc.lnZ0 * (1 - s));
     zc.Z = Math.exp(zc.lnZ);
-    if (tau >= 1 || zc.lnZ === 0) {
+    if (t >= 1 && zc.phase !== 'landed') {
         zc.lnZ = 0; zc.Z = 1;
-        if (zc.phase !== 'landed') { zc.phase = 'landed'; scheduleCrossfade(); }
+        zc.phase = 'landed';
+        scheduleCrossfade();
     }
     applyZoom();
 }
