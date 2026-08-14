@@ -49,7 +49,7 @@ const MATERIALS = {
         grip: 0.6,             // tangential drag on non-stuck contact vertices 0..1
         adhesionStrength: 0.05, // sticky-contact detach threshold (drift, units); 0 = no sticking
         adhesionZone: 0.8,     // fraction of the leading hemisphere where vertices may latch on
-        tearStrain: 10.5,      // strain that snaps a link — much tougher: film stretches deeper and slower before it goes
+        tearStrain: 8.9,       // strain that snaps a link — ~15% weaker than before so the film ruptures earlier and never over-stretches
         tearCascade: 0.8,      // neighbour threshold multiplier after a snap (unzip)
         recoil: 0.55,          // snap-back impulse per unit strain
         healSpring: 14,        // home-spring stiffness at full heal ramp (1/s²)
@@ -109,11 +109,11 @@ const CONFIG = {
     materialPreset: 'latex',
     material: { ...MATERIALS.latex }, // live-editable copy (edited sliders → "custom")
     ball: {
-        radius: 0.18,             // bigger — reads clearly through the transparent film
+        radius: 0.10,
         startHeight: 3.2,         // spawn height above the film (along +normal)
-        speed: 0.35,              // units/s along -normal (slow, comet-like) — keeps the ball in the funnel longer
+        speed: 0.55,              // units/s along -normal (slow, comet-like)
         exitDistance: 10.0,       // despawn this far below the film — large enough so the ball keeps falling until it's clearly off-screen
-        color: '#8df4ff',         // lighter than the film so it reads on top of the dark tip
+        color: '#33dcf0',         // matches the sphere as drawn in the logo art
     },
     // rupture.maxDepth is a hard failsafe. With tougher material we need more room to stretch
     // before the failsafe fires or the depth-limit tears prematurely.
@@ -140,9 +140,9 @@ const CONFIG = {
         baseColor: '#28d5e9',     // film color at rest / at the rim — matches the logo art
         darkenDepth: 1.9,         // deflection at which darkening saturates
         darkenPower: 0.7,         // curve exponent (higher = darkening stays near tip)
-        darkenStrength: 1.0,      // 0..1 max darkening / alpha-drop at full stretch
+        darkenStrength: 0.78,     // 0..1 max darkening at full stretch — capped below 1 so the tip stays a deep blue, never a vanishing black hole
         brightness: 1.0,          // global film brightness multiplier
-        alphaMode: 1,             // 0 = RGB darken (soft dark-blue gradient), 1 = alpha drop (film goes transparent so the ball shows through)
+        alphaMode: 0,             // 0 = RGB darken (the classic logo look), 1 = alpha drop (experiment — abandoned: reads ambiguously)
     },
     timing: {
         timeScale: 1.0,           // global slow-motion factor
@@ -540,14 +540,6 @@ const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 24), ballMat);
 ballMesh.renderOrder = 0;
 tiltGroup.add(ballMesh);
 ballMesh.visible = false;
-// Additive halo attached to the ball — makes it pop even through a thick tip of the film.
-// Child of ballMesh so it follows position/scale automatically.
-const haloMat = new THREE.MeshBasicMaterial({ color: '#4ee6ff', transparent: true,
-    opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false });
-const haloMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), haloMat);
-haloMesh.scale.setScalar(1.7); // 1.7× the ball's own radius (ball scales this whole subtree)
-haloMesh.renderOrder = 0; // drawn in the transparent queue before the membrane (renderOrder 1)
-ballMesh.add(haloMesh);
 const ballPos = new THREE.Vector3(); // local (tiltGroup) space
 // Debug handles: window.__mem.ballMesh / ballMat / ballPos / camera / CONFIG / THREE
 window.__mem = { get ballMesh(){return ballMesh;}, get ballMat(){return ballMat;},
