@@ -171,9 +171,8 @@ const CONFIG = {
         oneShot: true,            // after the ball leaves the frame, block any new drop — restart requires the user
         // -- self-calibrating continuous zoom-out (see updateZoom for the math) --
         edgePadFrac: 0.08,        // safety pad above/below the physics envelope, as a fraction of viewport height
-        slowRate: 0.03,           // exponential shrink rate (log-Z per s) BEFORE the first upswing
-        finalDuration: 4.5,       // s of the accelerated tail from the upswing moment to Z=1
-        blendWindow: 1.2,         // s of C^1 smoothing across the slow -> fast transition (no visible kink)
+        slowRate: 0.08,           // exponential shrink rate (log-Z per s) BEFORE the first upswing — close to the tail's average rate
+        finalDuration: 6.5,       // s of the tail from the upswing moment to Z=1 (soft cubic-Hermite landing)
         upswingTrigger: 0.15,     // membrane must climb at least this high (units) before we count "first upswing"
         upswingHysteresis: 0.02,  // and then drop this much from its peak to lock the upswing moment
         upswingFallbackTime: 6.0, // s inside PIERCED after which we force the transition (failsafe)
@@ -1387,7 +1386,6 @@ const PARAM_SCHEMA = [
         { key: 'edgePadFrac', min: 0, max: 0.25, step: 0.01 },
         { key: 'slowRate', min: 0, max: 0.5, step: 0.01 },
         { key: 'finalDuration', min: 0.5, max: 12, step: 0.1 },
-        { key: 'blendWindow', min: 0.1, max: 4, step: 0.1 },
         { key: 'startCenterY', min: 0.2, max: 0.8, step: 0.01 },
         { key: 'layoutLiftPx', min: -60, max: 60, step: 1, apply: applyLayoutLift },
         { key: 'logoRimWidthFrac', min: 0.5, max: 1, step: 0.01 },
@@ -1669,6 +1667,7 @@ const zoomCtl = {
     // upswing detector (drives the ONE speed change)
     peakY: -Infinity, rising: false, tPierced: -1, tUpswing: -1,
     tGlobal: 0,                // seconds since zoomInit
+    tail: null,                // frozen cubic-Hermite tail: { lnZ0, D, a, b, c }
     fadeTimer: 0,
 };
 
@@ -1868,6 +1867,7 @@ function zoomInit() {
     zoomCtl.tPierced = -1;
     zoomCtl.tUpswing = -1;
     zoomCtl.tGlobal = 0;
+    zoomCtl.tail = null;
     zoomCtl.spawnH = computeSpawnHeight();
     zoomCtl.phase = 'slow';
     applyZoom();
@@ -1904,30 +1904,37 @@ function updateZoom(dt) {
         }
     }
 
-    // Fast-tail velocity (log-Z per s) needed to land at Z=1 exactly finalDuration
-    // seconds AFTER the upswing. Recomputed live from the current lnZ so the tail
-    // duration stays fixed regardless of what the slow phase did before it.
-    let vFast = cfg.slowRate;
-    if (zc.tUpswing >= 0) {
-        const remaining = Math.max(0.1, cfg.finalDuration - (zc.tGlobal - zc.tUpswing));
-        vFast = Math.max(cfg.slowRate, zc.lnZ / remaining);
+    // Before the upswing: constant slow drift down in ln(Z).
+    if (zc.tUpswing < 0) {
+        zc.lnZ = Math.max(0, zc.lnZ - cfg.slowRate * dt);
+        zc.Z = Math.exp(zc.lnZ);
+        applyZoom();
+        return;
     }
 
-    // Blend v_slow -> v_fast across [tUpswing - W/2, tUpswing + W/2] with a
-    // cubic smoothstep, so the velocity is C^1-continuous across the switch.
-    let v = cfg.slowRate;
-    if (zc.tUpswing >= 0) {
-        const half = cfg.blendWindow / 2;
-        const s = smoothstep((zc.tGlobal - (zc.tUpswing - half)) / cfg.blendWindow);
-        v = cfg.slowRate + (vFast - cfg.slowRate) * s;
+    // At the very moment we detect the upswing, freeze the cubic-Hermite tail
+    // so that its slope at tau=0 equals the pre-upswing slow rate — that is
+    // what removes the visible "step". The curve goes from lnZ0 at tau=0 to 0
+    // at tau=1 with zero slope at tau=1 (soft landing).
+    if (!zc.tail) {
+        const lnZ0 = zc.lnZ;
+        const D = Math.max(0.1, cfg.finalDuration);
+        // a = d(lnZ)/d(tau) at tau=0, normalized by lnZ0. Negative because lnZ decreases.
+        const rawA = -cfg.slowRate * D / Math.max(1e-6, lnZ0);
+        // Cap |a| so the cubic stays monotone (a in [-3, 0] gives no overshoot).
+        const a = Math.max(-3, Math.min(0, rawA));
+        const b = -(3 + 2 * a);
+        const c = 2 + a;
+        zc.tail = { lnZ0, D, a, b, c };
     }
-
-    // Integrate ln(Z) downward at rate v; clamp to 0 (Z=1) at the bottom.
-    zc.lnZ = Math.max(0, zc.lnZ - v * dt);
+    const { lnZ0, D, a, b, c } = zc.tail;
+    const tau = Math.min(1, (zc.tGlobal - zc.tUpswing) / D);
+    const f = 1 + a * tau + b * tau * tau + c * tau * tau * tau;
+    zc.lnZ = Math.max(0, lnZ0 * f);
     zc.Z = Math.exp(zc.lnZ);
-    if (zc.lnZ === 0 && zc.tUpswing >= 0) {
-        zc.phase = 'landed';
-        scheduleCrossfade();
+    if (tau >= 1 || zc.lnZ === 0) {
+        zc.lnZ = 0; zc.Z = 1;
+        if (zc.phase !== 'landed') { zc.phase = 'landed'; scheduleCrossfade(); }
     }
     applyZoom();
 }
