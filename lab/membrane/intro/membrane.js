@@ -159,7 +159,7 @@ const CONFIG = {
     // healing back to flat, the film settles into the logo funnel.
     // ------------------------------------------------------------------------
     intro: {
-        enabled: false,           // master switch — attractor OFF for pure-oscillation study
+        enabled: true,            // master switch — after the pierce the film settles into the logo funnel (no chaotic flapping)
         autoTrigger: true,        // switch to attract mode automatically at PIERCED
         triggerDelay: 0.35,       // s after PIERCED before attractor engages (let recoil breathe)
         rampDuration: 1.2,        // s to ramp attractor strength from 0 → full
