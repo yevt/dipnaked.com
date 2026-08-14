@@ -171,7 +171,7 @@ const CONFIG = {
         oneShot: true,            // after the ball leaves the frame, block any new drop — restart requires the user
         // -- continuous zoom-out: we START zoomed into the (live) logo and pull back --
         overscanStart: 1.12,      // membrane rim width at t=0, as a fraction of viewport width (>1 = edges eaten)
-        fitWidth: 1.0,            // rim width fraction of viewport at the moment the ball touches the film
+        fitWidth: 0.97,           // rim width fraction of viewport at the moment the ball touches the film
         slowShrink: 0.10,         // max extra width fraction eaten by the slow pull-back during stretch/tear/slosh
         slowTime: 9.0,            // s over which slowShrink would fully play out
         finalDuration: 5.0,       // s of the accelerated final pull-back to the real layout scale
@@ -1863,6 +1863,18 @@ function updateZoom(dt) {
         if (p >= 1) { zc.Z = 1; zc.phase = 'landed'; scheduleFade(); }
     }
     applyZoom();
+}
+
+// Webfont load can reflow the layout and move the logo — re-derive the target
+// geometry once fonts are in, but only while we are still far from landing.
+if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => {
+        if (zoomCtl.phase !== 'drop' && zoomCtl.phase !== 'slow') return;
+        if (!measureBaseGeometry()) return;
+        zoomBounds();
+        zoomCtl.Z = Math.min(zoomCtl.Z, zoomCtl.Z0);
+        applyZoom();
+    });
 }
 
 // Re-derive the geometry on resize; keep the current zoom phase alive.
