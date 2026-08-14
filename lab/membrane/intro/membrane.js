@@ -171,6 +171,7 @@ const CONFIG = {
         oneShot: true,            // after the ball leaves the frame, block any new drop — restart requires the user
         // -- self-calibrating continuous zoom-out (see updateZoom for the math) --
         edgePadFrac: 0.03,        // safety pad (fraction of the SHORT viewport side) around the physics envelope
+        envelopeShrink: 0.72,     // fraction of rupture.maxDepth actually used at Z0 (the deepest real excursion is ~70-75% of the failsafe)
         totalDuration: 11.0,      // s of the whole ln(Z) S-curve, from t=0 (start) to Z=1 (landed)
         upswingTrigger: 0.15,     // membrane must climb at least this high (units) before we count "first upswing"
         upswingHysteresis: 0.02,  // and then drop this much from its peak to lock the upswing moment
@@ -1757,28 +1758,29 @@ function canvasPxPerUnitAtCenter() {
 }
 
 // Choose Z0 and the on-screen rim-center Y so the entire motion envelope fits
-// in the viewport with a small symmetric pad on the constraining side. Handles
-// landscape and portrait honestly:
+// in the viewport with a small pad on the constraining side. All measurements
+// are in SCREEN CSS-px at Z=1 (i.e. how big the rim/ball/tension would appear
+// with no CSS zoom), which is what the applyZoom multiplier acts on.
 //
-//   Horizontal constraint:  Z * rimHalfWidthWw <= (viewport_w / 2 - padPx)
-//   Vertical constraint:    Z * (rimHalfHeightWw + envDeepPx) <= viewport_h - 2 padPx
+//   Horizontal:  Z * rimFullWidthPx  <= viewport_w - 2 padPx
+//   Vertical:    Z * (rimHalfHeightPx + envDeepDisplayPx) <= viewport_h - 2 padPx
 //
-// Once Z0 is picked, rim center Y is placed so the deep tension exactly clears
-// the bottom pad; the rim top sits somewhere above with headroom for the ball.
-function computeStartFit(rimHalfWidthWw, rimHalfHeightWw, envDeepPx) {
+// envDeepDisplayPx is intentionally SHORTER than rupture.maxDepth: that value
+// is a failsafe, actual first-cycle deep excursion is ~70-75% of it.
+function computeStartFit(rimFullWidthPx, rimHalfHeightPx, envDeepFullPx) {
     const cfg = CONFIG.intro;
     const vw = window.innerWidth, vh = window.innerHeight;
     const shortSide = Math.min(vw, vh);
     const padPx = shortSide * cfg.edgePadFrac;
     const availW = vw - 2 * padPx;
     const availH = vh - 2 * padPx;
-    const Zwidth = availW / (2 * Math.max(1, rimHalfWidthWw));
-    const Zheight = availH / Math.max(1, rimHalfHeightWw + envDeepPx);
-    const Z = Math.max(1, Math.min(Zwidth, Zheight));
-    // Vertical placement: rim center sits so the bottom of the physics envelope
-    // ends at (vh - padPx). That leaves the maximum possible room above the rim
-    // for the falling ball.
-    const cy = vh - padPx - Z * envDeepPx;
+    const envDeepDisp = envDeepFullPx * cfg.envelopeShrink;
+    const Zw = availW / Math.max(1, rimFullWidthPx);
+    const Zh = availH / Math.max(1, rimHalfHeightPx + envDeepDisp);
+    const Z = Math.max(1, Math.min(Zw, Zh));
+    // Vertical placement: bottom of the deep excursion lands exactly on the
+    // bottom pad, giving maximum room ABOVE the rim for the falling ball.
+    const cy = vh - padPx - Z * envDeepDisp;
     return { Z, cy };
 }
 
@@ -1855,18 +1857,18 @@ function zoomInit() {
     if (!measureBaseGeometry()) { zoomCtl.phase = 'idle'; return; }
     // Measure geometry needed for the auto-fit envelope, in world (unzoomed) px.
     zoomCtl.canvasPxPerUnit = canvasPxPerUnitAtCenter();
-    const halfRimHeightPx = zoomCtl.canvasPxPerUnit * CONFIG.membrane.radius * Math.abs(Math.sin(
+    // Everything below is in SCREEN CSS-px at Z=1 (i.e. as it would render
+    // with no CSS zoom). pxPerUnitScreen = how many CSS-px correspond to 1
+    // world unit at the membrane center under the base layout scale sL.
+    const pxPerUnitScreen = zoomCtl.sL * zoomCtl.canvasPxPerUnit;
+    const R = CONFIG.membrane.radius;
+    const rimFullWidthPx = 2 * R * pxPerUnitScreen;
+    const rimHalfHeightPx = R * pxPerUnitScreen * Math.abs(Math.sin(
         THREE.MathUtils.degToRad(CONFIG.scene.membraneTilt)
     ));
-    const rimHalfHeightWw = zoomCtl.sL * halfRimHeightPx;
-    // Rim full width in world (unzoomed) px — tilted rim projects to an ellipse
-    // whose full width is the rim diameter (2R * pxPerUnit).
-    const rimHalfWidthWw = zoomCtl.sL * zoomCtl.canvasPxPerUnit * CONFIG.membrane.radius;
-    // Physics envelope: the ball can drag the center down to CONFIG.rupture.maxDepth (units).
-    // In canvas px that is maxDepth * canvasPxPerUnit; in world px it becomes:
-    const envDeepWw = zoomCtl.sL * zoomCtl.canvasPxPerUnit * CONFIG.rupture.maxDepth;
+    const envDeepFullPx = CONFIG.rupture.maxDepth * pxPerUnitScreen;
     const vw = window.innerWidth, vh = window.innerHeight;
-    const fit = computeStartFit(rimHalfWidthWw, rimHalfHeightWw, envDeepWw);
+    const fit = computeStartFit(rimFullWidthPx, rimHalfHeightPx, envDeepFullPx);
     zoomCtl.Z0 = fit.Z;
     zoomCtl.C0 = { x: vw / 2, y: fit.cy };
     zoomCtl.lnZ0 = Math.log(zoomCtl.Z0);
