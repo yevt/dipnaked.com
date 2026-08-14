@@ -1305,14 +1305,22 @@ function tick(now) {
         clearSticky();           // fresh drop: no leftover latches or bans
         ballEngaged = true;      // physics runs and the sphere is drawn as it falls
         ballMesh.visible = true;  // the film now wraps it, so it stays visible from any angle
+        console.log('[ball spawn]', { startH, ang: ang.toFixed(3), off: off.toFixed(3),
+            pos: [ballPos.x.toFixed(3), ballPos.y.toFixed(3), ballPos.z.toFixed(3)],
+            memR: mem?.R, speed: CONFIG.ball.speed });
         cycleIndex++;
         dropUsed = true;
         mem.tearRng = mulberry32(((Math.round(CONFIG.imperfection.seed) * 2654435761) ^ (cycleIndex * 40503)) >>> 0);
         setPhase(Phase.APPROACH);
     } else if (phase === Phase.PIERCED || phase === Phase.HEAL) {
         if (ballEngaged && ballPos.y < -CONFIG.ball.exitDistance) {
-            ballMesh.visible = false;
-            ballEngaged = false;
+            // Keep the ball engaged (physics runs) and VISIBLE all the way down
+            // until it has clearly left the viewport. This makes rupture-time
+            // debugging much easier — the ball never mysteriously vanishes.
+            if (ballPos.y < -CONFIG.ball.exitDistance * 3) {
+                ballMesh.visible = false;
+                ballEngaged = false;
+            }
         }
         if (phase === Phase.HEAL) {
             const healed = mem.brokenCount === 0 && healedAt >= 0;
@@ -1325,6 +1333,16 @@ function tick(now) {
     }
 
     if (ballEngaged) ballMesh.position.copy(ballPos);
+    // Debug telemetry — enable with `window.__ballDebug = true`.
+    if (window.__ballDebug && (performance.now() - (window.__ballDbgT || 0)) > 250) {
+        window.__ballDbgT = performance.now();
+        const wp = ballMesh.getWorldPosition(new THREE.Vector3());
+        const ndc = wp.clone().project(camera);
+        console.log(`[ball] phase=${phase} vis=${ballMesh.visible} engaged=${ballEngaged}`
+            + ` local=(${ballPos.x.toFixed(2)},${ballPos.y.toFixed(2)},${ballPos.z.toFixed(2)})`
+            + ` ndc=(${ndc.x.toFixed(2)},${ndc.y.toFixed(2)},${ndc.z.toFixed(3)})`
+            + ` broken=${mem?.brokenCount} spokes=${mem?.spokesBroken}`);
+    }
     mem.geometry.attributes.position.needsUpdate = true;
     updateColors();
     updateContactDebug();
