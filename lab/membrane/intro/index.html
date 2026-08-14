@@ -8,16 +8,29 @@
     <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" />
     <link rel="stylesheet" href="../../../style.css" />
     <style>
-        /* Membrane canvas overlay: fullscreen, transparent, above the layout.
-           JS animates its transform to land the membrane rim onto the logo rim. */
+        /* No scrollbars during the intro — the layout is CSS-scaled and any
+           overflow would shift the logo position between runs. */
+        html, body { overflow: hidden; }
+        /* Membrane canvas overlay: fullscreen, transparent, ABOVE everything.
+           During the intro the physics is the star; the canvas is allowed to
+           cover the layout. It fades out during the final crossfade. */
         #membrane-canvas {
             position: fixed;
             inset: 0;
-            z-index: 100;
+            z-index: 500;           /* above layout — nothing occludes the physics */
             pointer-events: none;   /* layout stays clickable underneath */
+        }
+        /* Zoom wrapper: JS drives translate+scale every frame so the layout
+           and the membrane pull back as one world. */
+        #layout-zoom {
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto;
             transform-origin: 0 0;
             will-change: transform;
         }
+        /* All layout text and the logo fade in together at the end. */
+        .center-block { opacity: 0; }
         /* Dev restart button — always visible, next to the lil-gui panel */
         #restart-btn {
             position: fixed;
@@ -41,6 +54,7 @@
     </style>
 </head>
 <body>
+    <div id="layout-zoom">
     <div class="center-block">
         <a href="/"><img src="../../../logo-v2.png" alt="dipnaked" class="logo" id="logo-img" /></a>
         <div class="text-block">
@@ -52,6 +66,7 @@
                 <a href="https://www.instagram.com/snailstrobe/" target="_blank" rel="noopener">look</a>
             </div>
         </div>
+    </div>
     </div>
 
     <button id="restart-btn" title="Replay the intro">restart</button>
