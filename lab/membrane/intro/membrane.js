@@ -111,7 +111,10 @@ const CONFIG = {
     ball: {
         radius: 0.10,
         startHeight: 3.2,         // spawn height above the film (along +normal)
-        speed: 0.55,              // units/s along -normal (slow, comet-like)
+        speed: 0.55,              // units/s along -normal (slow, comet-like) — cruise speed near the film
+        startBoost: 3.0,          // launch speed multiplier ("thrown drop"): ×speed at spawn, decays to 1× while falling
+        boostFadeEnd: 1.4,        // height above the film (units) where the boost has fully decayed to cruise speed
+        boostCurve: 1.5,          // decay shape: 1 = linear, >1 = keeps speed longer and brakes harder near the end
         exitDistance: 10.0,       // despawn this far below the film — large enough so the ball keeps falling until it's clearly off-screen
         capWrap: 0.0,             // fraction of the ball's footprint kept on the sphere surface (with slip). 0 = off — natural drape via collision + tension
         centerPin: false,         // hard-pin the film's center vertex to the ball's leading pole. OFF: the film drapes the sphere naturally — the tip mirrors the ball instead of pinching into the pole point
@@ -162,7 +165,7 @@ const CONFIG = {
     // ------------------------------------------------------------------------
     intro: {
         enabled: true,            // master switch for the attractor machinery (physics hook + manual snap)
-        endAttractor: true,       // engage the attractor ONLY at the very end of parking, right before the fadeout
+        endAttractor: false,      // engage the attractor at the very end of parking. OFF: the film keeps free physics to the last frame
         endAttractorLead: 1.6,    // s before landing when the attractor starts ramping in (covers attractorRamp)
         attractorRamp: 1.2,       // s to ramp attractor strength from 0 → full
         strength: 32,             // full attractor spring constant (1/s^2)
@@ -192,8 +195,8 @@ const CONFIG = {
         sEase: 3,                 // 2..6 — ease exponent (2=quadratic, 3=cubic, 5=smootherstep-like)
         edgePadPx: 1,             // ball spawn: how many px BELOW the top screen edge (visible immediately)
         layoutLiftPx: 11,         // lift of .center-block to balance the logo art's internal top padding
-        logoRimWidthFrac: 0.83,   // rim ellipse width as a fraction of the logo image square (art: 1036/1254 = 0.826)
-        logoRimTopFrac: 0.166,    // rim top edge as a fraction of the logo image square height (art: 208/1254)
+        logoRimWidthFrac: 0.827,  // rim ellipse width as a fraction of the logo image square (art: 1037/1254, pixel-measured)
+        logoRimTopFrac: 0.1667,   // rim top edge as a fraction of the logo image square height (art: 209/1254, pixel-measured)
         crossfade: false,         // OFF for tuning: both layers stay visible so you can compare canvas vs. logo layout live
         fadeDelay: 0.0,           // s after landing (Z=1) before the crossfade starts
         fadeDuration: 1.4,        // s of the crossfade
@@ -912,7 +915,17 @@ function physicsStep(dt) {
     // `adhesionStrength` — the film clings, follows the sphere's shape, and
     // free tension arcs start past the shrinking edge of the contact patch.
     if (ballEngaged) {
-        const step = CONFIG.ball.speed * dt;
+        // Launch boost: the ball is THROWN in — startBoost× cruise speed at spawn,
+        // easing down to exactly 1× by boostFadeEnd units above the film. The
+        // tension/adhesion mechanics below never see anything but ballPos deltas.
+        const bb = CONFIG.ball;
+        let speed = bb.speed;
+        if (bb.startBoost > 1 && phase === Phase.APPROACH && !ballStuck) {
+            const h0 = Math.max(bb.boostFadeEnd + 0.01, zoomCtl.spawnH || bb.startHeight);
+            const t = Math.min(1, Math.max(0, (ballPos.y - bb.boostFadeEnd) / (h0 - bb.boostFadeEnd)));
+            speed *= 1 + (bb.startBoost - 1) * Math.pow(t, Math.max(0.1, bb.boostCurve));
+        }
+        const step = speed * dt;
         ballPos.y -= step;
         if (phase === Phase.APPROACH) {
             const r = ballCollisionRadius();
@@ -1506,6 +1519,9 @@ const PARAM_SCHEMA = [
     { id: 'ball', title: 'ball', obj: () => CONFIG.ball, params: [
         { key: 'radius', min: 0.02, max: 0.5, step: 0.01, apply: applyBallLook },
         { key: 'startHeight', min: 0.5, max: 8, step: 0.1 },
+        { key: 'startBoost', min: 1, max: 8, step: 0.1, tip: 'launch speed multiplier at spawn (1 = off)' },
+        { key: 'boostFadeEnd', min: 0, max: 3, step: 0.05, tip: 'height above the film where speed is back to 1x' },
+        { key: 'boostCurve', min: 0.3, max: 4, step: 0.05, tip: '1 = linear decay; higher = brake later and harder' },
         { key: 'speed', min: 0.05, max: 3, step: 0.01 },
         { key: 'exitDistance', min: 1, max: 20, step: 0.5, tip: 'World-units below the membrane at which the ball is despawned. Larger = it keeps falling further past the bottom of the screen before disappearing.' },
         { key: 'capWrap', min: 0, max: 1.2, step: 0.05, tip: 'Fraction of the ball footprint kept on the sphere surface during approach (tangential slip allowed). 0 = off: natural drape via collision + tension. Applies from the next drop.' },
