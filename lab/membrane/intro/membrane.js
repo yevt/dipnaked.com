@@ -1263,9 +1263,18 @@ function tick(now) {
     const rawDt = Math.min(0.1, (now - lastTime) / 1000);
     lastTime = now;
     const dt = rawDt * CONFIG.timing.timeScale;
-    if (HOLD_DEPTH > 0 && phase === Phase.APPROACH && -mem.pos[1] >= HOLD_DEPTH) {
-        renderer.render(scene, camera);
-        return; // frozen — render only, no physics, no phase clocks
+    if (HOLD_DEPTH > 0 && phase === Phase.APPROACH) {
+        // Fast-forward synchronously to the hold depth (immune to RAF throttling),
+        // then freeze: render only, no physics, no phase clocks.
+        let guard = 0;
+        while (-mem.pos[1] < HOLD_DEPTH && guard++ < 30000) physicsStep(FIXED_DT);
+        if (-mem.pos[1] >= HOLD_DEPTH) {
+            if (ballEngaged) ballMesh.position.copy(ballPos);
+            mem.geometry.attributes.position.needsUpdate = true;
+            updateColors();
+            renderer.render(scene, camera);
+            return;
+        }
     }
     accumulator += dt;
     phaseTime += dt;
