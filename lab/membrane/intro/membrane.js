@@ -1999,6 +1999,51 @@ function applyZoom() {
     camera.setViewOffset(w, h, -tau.x / sigma, -tau.y / sigma, w / sigma, h / sigma);
 }
 
+// ----------------------------------------------------------------------------
+// Layout telemetry — one-line snapshots of every number that decides where the
+// funnel lands on the logo. Logged at init / fonts / resize / landed; manual:
+// MEMBRANE.layoutReport() in the console.
+// ----------------------------------------------------------------------------
+function layoutSnapshot(tag) {
+    try {
+        const zc = zoomCtl;
+        const f2 = (v) => (typeof v === 'number' && isFinite(v)) ? Math.round(v * 100) / 100 : v;
+        // Final-layout (identity-transform) coordinates of the logo target.
+        const wrap = layoutWrap();
+        const prev = wrap ? wrap.style.transform : '';
+        if (wrap) wrap.style.transform = 'none';
+        const img = document.getElementById('logo-img');
+        const ir = img ? img.getBoundingClientRect() : null;
+        const tgt = computeLogoRimRect();
+        if (wrap) wrap.style.transform = prev;
+        // Actual on-screen positions right now: live logo target (with the
+        // current CSS transform) vs the projected pinned ring (canvas CSS px).
+        const liveTgt = computeLogoRimRect();
+        const rim = computeRimScreenBBox();
+        const snap = {
+            tag, t: f2(zc.tGlobal), zoomPhase: zc.phase, physPhase: phase,
+            vp: { w: window.innerWidth, h: window.innerHeight,
+                  clientW: document.documentElement.clientWidth,
+                  dpr: f2(window.devicePixelRatio),
+                  vvScale: f2(window.visualViewport ? window.visualViewport.scale : 1) },
+            logoRect: ir ? { x: f2(ir.left), y: f2(ir.top), w: f2(ir.width), h: f2(ir.height) } : null,
+            target: tgt ? { cx: f2(tgt.cx), top: f2(tgt.top), w: f2(tgt.width) } : null,
+            calib: { sL: f2(zc.sL), tLx: f2(zc.tL.x), tLy: f2(zc.tL.y),
+                     Mwx: f2(zc.Mw.x), Mwy: f2(zc.Mw.y) },
+            fit: { Z0: f2(zc.Z0), C0x: f2(zc.C0.x), C0y: f2(zc.C0.y),
+                   spawnH: f2(zc.spawnH), ppu: f2(zc.pxPerUnitScreen), pad: f2(zc.padPx) },
+            now: { Z: f2(zc.Z),
+                   rim: { cx: f2(rim.cx), top: f2(rim.top), w: f2(rim.width) },
+                   err: (liveTgt && isFinite(rim.cx))
+                       ? { dx: f2(rim.cx - liveTgt.cx), dy: f2(rim.top - liveTgt.top),
+                           dw: f2(rim.width - liveTgt.width) }
+                       : null },
+        };
+        console.log('[layout]', JSON.stringify(snap));
+        return snap;
+    } catch (e) { console.warn('[layout] snapshot failed', e); return null; }
+}
+
 // Deepest free-vertex excursion below the rim plane, in world units (>= 0).
 function deepestFreeDepth() {
     const { pos, pinned, count } = mem;
@@ -2078,6 +2123,7 @@ function zoomInit() {
     zoomCtl.spawnH = computeSpawnHeight();
     zoomCtl.phase = 'slow';
     applyZoom();
+    layoutSnapshot('init');
 }
 
 const smoothstep = (t) => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
@@ -2115,6 +2161,8 @@ function updateZoom(dt) {
         zc.lnZ = 0; zc.Z = 1;
         zc.phase = 'landed';
         scheduleCrossfade();
+        layoutSnapshot('landed');
+        setTimeout(() => layoutSnapshot('landed+3s'), 3000);
     }
     applyZoom();
 }
@@ -2126,6 +2174,7 @@ if (document.fonts && document.fonts.ready) {
         if (zoomCtl.phase === 'idle') return;
         measureBaseGeometry();
         applyZoom();
+        layoutSnapshot('fonts');
     });
 }
 
@@ -2135,6 +2184,7 @@ window.addEventListener('resize', () => {
     if (!measureBaseGeometry()) return;
     if (zoomCtl.phase === 'landed') { zoomCtl.lnZ = 0; zoomCtl.Z = 1; }
     applyZoom();
+    layoutSnapshot('resize');
 });
 
 // ----------------------------------------------------------------------------
@@ -2200,7 +2250,7 @@ try {
 
 // Console handle for quick tweaking: MEMBRANE.CONFIG.…, MEMBRANE.restart()
 window.MEMBRANE = { CONFIG, MATERIALS, gui, restart: restartAll,
-    engageIntro, disengageIntro, zoom: zoomCtl,
+    engageIntro, disengageIntro, zoom: zoomCtl, layoutReport: layoutSnapshot,
     get phase() { return phase; }, get mem() { return mem; }, get ballPos() { return ballPos; },
     get phaseTime() { return phaseTime; },
     get introState() { return introState; } };
