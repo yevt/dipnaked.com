@@ -173,7 +173,7 @@ const CONFIG = {
         // -- static start framing (computed ONCE in zoomInit, camera does not move until parking) --
         edgePadFrac: 0.03,        // safety pad (fraction of the SHORT viewport side) around the physics envelope
         envDownFrac: 1.0,         // fraction of rupture.maxDepth reserved BELOW the rim (down-stretch)
-        envUpUnits: 1.4,          // world units reserved ABOVE the rim plane for the post-pierce upswing
+        envUpUnits: 2.0,          // world units reserved ABOVE the rim plane for the post-pierce upswing (measured peak ≈1.9 before parking)
         // === CAMERA / PARKING (event-anchored timeline) ===
         // Three phases:
         //   1. FLIGHT (variable length — depends on viewport height): ball falls,
