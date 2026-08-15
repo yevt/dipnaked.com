@@ -260,6 +260,10 @@ function applyCamera() {
     camera.fov = CONFIG.scene.cameraFov;
     camera.position.set(0, CONFIG.scene.cameraHeight, CONFIG.scene.cameraDistance);
     camera.lookAt(0, CONFIG.scene.lookAtY, 0);
+    // lookAt() refreshes matrixWorldInverse BEFORE applying the new quaternion
+    // (three.js quirk): force a recompute so projections done before the first
+    // render (boot-time calibration!) don't see a camera without its pitch.
+    camera.updateMatrixWorld(true);
     camera.updateProjectionMatrix();
     scene.background = null; // transparent over the DOM page
 }
@@ -1837,6 +1841,7 @@ const zoomCtl = {
     sL: 1, tL: { x: 0, y: 0 }, // T_land: canvas px -> world px
     rimWw: 1,                  // rim width in world px
     spawnH: 0,                 // computed ball spawn height (world units)
+    wrapO: { x: 0, y: 0 },     // layout wrap's untransformed page origin (body padding)
     canvasPxPerUnit: 0,        // native canvas px per world unit at membrane center (unzoomed)
     parkingT0: -1,             // tGlobal at which parking (the S-curve flight) started; -1 = still holding at Z0
     tGlobal: 0,                // seconds since zoomInit
@@ -1844,16 +1849,21 @@ const zoomCtl = {
 };
 
 // Project the pinned outer ring of the membrane to canvas CSS pixels.
-function computeRimScreenBBox() {
+// useHome: project the REST (flat) ring positions instead of the current ones —
+// calibration must not depend on the membrane's momentary shape (e.g. the
+// funnel left over from the previous cycle at restart time).
+function computeRimScreenBBox(useHome = false) {
     tiltGroup.updateMatrixWorld(true);
+    camera.updateMatrixWorld(true); // never project through a stale camera matrix
     const w = window.innerWidth, h = window.innerHeight;
     const v = new THREE.Vector3();
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    const { pos, ringOf, count, R } = mem;
+    const { pos, home, ringOf, count, R } = mem;
+    const src = useHome ? home : pos;
     for (let i = 0; i < count; i++) {
         if (ringOf[i] !== R) continue; // outer (pinned) ring only
         const j = i * 3;
-        v.set(pos[j], pos[j + 1], pos[j + 2]);
+        v.set(src[j], src[j + 1], src[j + 2]);
         v.applyMatrix4(tiltGroup.matrixWorld);
         v.project(camera);
         const px = (v.x + 1) / 2 * w;
@@ -1899,10 +1909,14 @@ function measureBaseGeometry() {
     const prev = wrap ? wrap.style.transform : '';
     if (wrap) wrap.style.transform = 'none';
     const target = computeLogoRimRect();
+    // The wrap's own layout origin (body padding etc.): the CSS transform
+    // scales about THIS point, not the viewport corner — applyZoom compensates.
+    const wr = wrap ? wrap.getBoundingClientRect() : null;
     if (wrap) wrap.style.transform = prev;
     if (!target || !mem) return false;
+    zoomCtl.wrapO = wr ? { x: wr.left, y: wr.top } : { x: 0, y: 0 };
     camera.clearViewOffset();
-    const rim = computeRimScreenBBox();
+    const rim = computeRimScreenBBox(true);
     if (!isFinite(rim.width) || rim.width <= 0) return false;
     zoomCtl.sL = target.width / rim.width;
     zoomCtl.tL = { x: target.cx - zoomCtl.sL * rim.cx,
@@ -1918,6 +1932,7 @@ function measureBaseGeometry() {
 // (projected with the base camera — call only while the view offset is clear).
 function screenYAtHeight(h, sigma, tauY) {
     tiltGroup.updateMatrixWorld(true);
+    camera.updateMatrixWorld(true);
     const v = new THREE.Vector3(0, h, 0).applyMatrix4(tiltGroup.matrixWorld);
     v.project(camera);
     return sigma * ((1 - v.y) / 2 * window.innerHeight) + tauY;
@@ -1926,6 +1941,7 @@ function screenYAtHeight(h, sigma, tauY) {
 // Native canvas px per world unit around the membrane center (view offset cleared).
 function canvasPxPerUnitAtCenter() {
     tiltGroup.updateMatrixWorld(true);
+    camera.updateMatrixWorld(true);
     const p0 = new THREE.Vector3(0, 0, 0).applyMatrix4(tiltGroup.matrixWorld);
     const p1 = new THREE.Vector3(0, 1, 0).applyMatrix4(tiltGroup.matrixWorld);
     p0.project(camera); p1.project(camera);
@@ -1992,7 +2008,14 @@ function applyZoom() {
     // interpolation — zero vertical wobble during flight and oscillations.
     const O = { x: C.x - Z * Mw.x, y: C.y - Z * Mw.y };
     const wrap = layoutWrap();
-    if (wrap) wrap.style.transform = `translate(${O.x}px, ${O.y}px) scale(${Z})`;
+    // The CSS transform acts about the wrap's layout origin (body padding
+    // offsets it from the viewport corner by wrapO), while O is derived in
+    // page coordinates — shift the translate so both mappings agree:
+    // page-space  p -> O + Z*p  ==  css translate O + (Z-1)*wrapO.
+    if (wrap) {
+        const wo = zoomCtl.wrapO;
+        wrap.style.transform = `translate(${O.x + (Z - 1) * wo.x}px, ${O.y + (Z - 1) * wo.y}px) scale(${Z})`;
+    }
     const sigma = Z * sL;
     const tau = { x: Z * tL.x + O.x, y: Z * tL.y + O.y };
     const w = window.innerWidth, h = window.innerHeight;
@@ -2029,7 +2052,8 @@ function layoutSnapshot(tag) {
             logoRect: ir ? { x: f2(ir.left), y: f2(ir.top), w: f2(ir.width), h: f2(ir.height) } : null,
             target: tgt ? { cx: f2(tgt.cx), top: f2(tgt.top), w: f2(tgt.width) } : null,
             calib: { sL: f2(zc.sL), tLx: f2(zc.tL.x), tLy: f2(zc.tL.y),
-                     Mwx: f2(zc.Mw.x), Mwy: f2(zc.Mw.y) },
+                     Mwx: f2(zc.Mw.x), Mwy: f2(zc.Mw.y),
+                     wox: f2(zc.wrapO.x), woy: f2(zc.wrapO.y) },
             fit: { Z0: f2(zc.Z0), C0x: f2(zc.C0.x), C0y: f2(zc.C0.y),
                    spawnH: f2(zc.spawnH), ppu: f2(zc.pxPerUnitScreen), pad: f2(zc.padPx) },
             now: { Z: f2(zc.Z),
