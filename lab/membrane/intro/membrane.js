@@ -2095,8 +2095,9 @@ try {
 
 // Console handle for quick tweaking: MEMBRANE.CONFIG.…, MEMBRANE.restart()
 window.MEMBRANE = { CONFIG, MATERIALS, gui, restart: restartAll,
-    engageIntro, disengageIntro,
+    engageIntro, disengageIntro, zoom: zoomCtl,
     get phase() { return phase; }, get mem() { return mem; }, get ballPos() { return ballPos; },
+    get phaseTime() { return phaseTime; },
     get introState() { return introState; } };
 
 // Standalone external restart button (index.html) — fires a fresh drop.
