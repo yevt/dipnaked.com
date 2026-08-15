@@ -260,6 +260,10 @@ function applyCamera() {
     camera.fov = CONFIG.scene.cameraFov;
     camera.position.set(0, CONFIG.scene.cameraHeight, CONFIG.scene.cameraDistance);
     camera.lookAt(0, CONFIG.scene.lookAtY, 0);
+    // lookAt() refreshes matrixWorldInverse BEFORE applying the new quaternion
+    // (three.js quirk): force a recompute so projections done before the first
+    // render (boot-time calibration!) don't see a camera without its pitch.
+    camera.updateMatrixWorld(true);
     camera.updateProjectionMatrix();
     scene.background = null; // transparent over the DOM page
 }
@@ -1850,6 +1854,7 @@ const zoomCtl = {
 // funnel left over from the previous cycle at restart time).
 function computeRimScreenBBox(useHome = false) {
     tiltGroup.updateMatrixWorld(true);
+    camera.updateMatrixWorld(true); // never project through a stale camera matrix
     const w = window.innerWidth, h = window.innerHeight;
     const v = new THREE.Vector3();
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -1927,6 +1932,7 @@ function measureBaseGeometry() {
 // (projected with the base camera — call only while the view offset is clear).
 function screenYAtHeight(h, sigma, tauY) {
     tiltGroup.updateMatrixWorld(true);
+    camera.updateMatrixWorld(true);
     const v = new THREE.Vector3(0, h, 0).applyMatrix4(tiltGroup.matrixWorld);
     v.project(camera);
     return sigma * ((1 - v.y) / 2 * window.innerHeight) + tauY;
@@ -1935,6 +1941,7 @@ function screenYAtHeight(h, sigma, tauY) {
 // Native canvas px per world unit around the membrane center (view offset cleared).
 function canvasPxPerUnitAtCenter() {
     tiltGroup.updateMatrixWorld(true);
+    camera.updateMatrixWorld(true);
     const p0 = new THREE.Vector3(0, 0, 0).applyMatrix4(tiltGroup.matrixWorld);
     const p1 = new THREE.Vector3(0, 1, 0).applyMatrix4(tiltGroup.matrixWorld);
     p0.project(camera); p1.project(camera);
