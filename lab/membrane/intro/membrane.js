@@ -170,9 +170,10 @@ const CONFIG = {
         funnelSharpness: 1.3,     // curve exponent — measured from the logo art profile (≈1.2–1.35)
         funnelRimFlat: 0.05,      // fraction of radius that stays near-flat before the drop begins
         oneShot: true,            // after the ball leaves the frame, block any new drop — restart requires the user
-        // -- self-calibrating continuous zoom-out (see updateZoom for the math) --
+        // -- static start framing (computed ONCE in zoomInit, camera does not move until parking) --
         edgePadFrac: 0.03,        // safety pad (fraction of the SHORT viewport side) around the physics envelope
-        envelopeShrink: 0.62,     // fraction of rupture.maxDepth used to size the start envelope (smaller = less vertical stretch)
+        envDownFrac: 1.0,         // fraction of rupture.maxDepth reserved BELOW the rim (down-stretch)
+        envUpUnits: 2.0,          // world units reserved ABOVE the rim plane for the post-pierce upswing (measured peak ≈1.9 before parking)
         // === CAMERA / PARKING (event-anchored timeline) ===
         // Three phases:
         //   1. FLIGHT (variable length — depends on viewport height): ball falls,
@@ -184,7 +185,7 @@ const CONFIG = {
         //      from Z0 to the logo (Z=1) in sDuration seconds. The film keeps its
         //      free physics all the way; only at the very end (endAttractorLead
         //      before landing) the attractor may grab it — right before fadeout.
-        postPierceHold: 3.0,      // s after the pierce before parking starts — let the film live through a full swing cycle or two
+        postPierceHold: 3.5,      // s after the pierce before parking starts — let the film live through a full swing cycle or two
         sDuration: 8.0,           // s — length of the parking S-curve (ends exactly on the logo, p=1)
         sEase: 3,                 // 2..6 — ease exponent (2=quadratic, 3=cubic, 5=smootherstep-like)
         edgePadPx: 1,             // ball spawn: how many px BELOW the top screen edge (visible immediately)
@@ -1435,7 +1436,8 @@ const PARAM_SCHEMA = [
         { key: 'funnelSharpness', min: 0.5, max: 8, step: 0.1 },
         { key: 'funnelRimFlat', min: 0, max: 0.9, step: 0.02 },
         { key: 'edgePadFrac', min: 0, max: 0.25, step: 0.01, tip: 'Safety pad around the physics envelope, as a fraction of the SHORT viewport side. Larger = the whole tension cone sits further from the screen edges.' },
-        { key: 'envelopeShrink', min: 0.3, max: 1.0, step: 0.02, tip: 'Fraction of rupture.maxDepth used to size the start envelope. Smaller = camera starts closer, membrane visually stretches LESS by the end.' },
+        { key: 'envDownFrac', min: 0.5, max: 1.2, step: 0.02, tip: 'Fraction of rupture.maxDepth reserved BELOW the rim in the start frame. 1.0 = the full tear depth always fits.' },
+        { key: 'envUpUnits', min: 0, max: 3, step: 0.05, tip: 'World units reserved ABOVE the rim plane for the post-pierce upswing. Bigger = camera starts further out, more top headroom.' },
         { key: 'postPierceHold', min: 0, max: 4, step: 0.05, tip: 'Seconds after the pierce before parking (the zoom-out) starts. Measured: the full upswing peaks ≈0.9s after the pierce — parking begins on the way down.' },
         { key: 'sDuration', min: 1, max: 15, step: 0.1, tip: 'How long (seconds) the symmetric S-curve tail lasts. The S ALWAYS ends on the logo, so this only reshapes the tail’s pace.' },
         { key: 'sEase', min: 2, max: 6, step: 1, tip: 'Symmetric ease exponent for the S-curve. 2 = quadratic in/out (softest), 3 = cubic (default), 5 = smootherstep-like (steepest middle).' },
@@ -1823,24 +1825,26 @@ function canvasPxPerUnitAtCenter() {
 // with no CSS zoom), which is what the applyZoom multiplier acts on.
 //
 //   Horizontal:  Z * rimFullWidthPx  <= viewport_w - 2 padPx
-//   Vertical:    Z * (rimHalfHeightPx + envDeepDisplayPx) <= viewport_h - 2 padPx
+//   Vertical:    Z * (rimHalfHeightPx + envUpPx + envDeepPx) <= viewport_h - 2 padPx
 //
-// envDeepDisplayPx is intentionally SHORTER than rupture.maxDepth: that value
-// is a failsafe, actual first-cycle deep excursion is ~70-75% of it.
-function computeStartFit(rimFullWidthPx, rimHalfHeightPx, envDeepFullPx) {
+// The FULL vertical envelope is reserved up front: down-stretch to the tear
+// depth (envDeepPx) PLUS the post-pierce upswing (envUpPx). The frame is
+// computed once and the camera does NOT move until parking starts.
+function computeStartFit(rimFullWidthPx, rimHalfHeightPx, envDeepPx, envUpPx) {
     const cfg = CONFIG.intro;
     const vw = window.innerWidth, vh = window.innerHeight;
     const shortSide = Math.min(vw, vh);
     const padPx = shortSide * cfg.edgePadFrac;
     const availW = vw - 2 * padPx;
     const availH = vh - 2 * padPx;
-    const envDeepDisp = envDeepFullPx * cfg.envelopeShrink;
     const Zw = availW / Math.max(1, rimFullWidthPx);
-    const Zh = availH / Math.max(1, rimHalfHeightPx + envDeepDisp);
+    const Zh = availH / Math.max(1, rimHalfHeightPx + envUpPx + envDeepPx);
     const Z = Math.max(1, Math.min(Zw, Zh));
     // Vertical placement: bottom of the deep excursion lands exactly on the
-    // bottom pad, giving maximum room ABOVE the rim for the falling ball.
-    const cy = vh - padPx - Z * envDeepDisp;
+    // bottom pad. Whatever is left over (when width constrains Z) becomes
+    // EXTRA headroom above the rim — the upswing never as high as the stretch
+    // is deep, so the top gap naturally reads a bit larger. That's intended.
+    const cy = vh - padPx - Z * envDeepPx;
     return { Z, cy };
 }
 
@@ -1870,17 +1874,9 @@ function applyZoom() {
         ? THREE.MathUtils.clamp(1 - Math.log(Math.max(Z, 1)) / Math.log(Z0), 0, 1)
         : 1;
     const C = { x: C0.x + (Mw.x - C0.x) * u, y: C0.y + (Mw.y - C0.y) * u };
-    // Live envelope clamp: never let the deepest point of the membrane slip
-    // below the bottom pad. depthLive (world units) tracks the real tension
-    // depth with instant attack / slow release (updated in updateZoom).
-    // The clamp fades out as Z→1 so the landing on the logo stays exact —
-    // by then the membrane has recoiled and settled anyway.
-    if (zoomCtl.pxPerUnitScreen) {
-        const depthPx = (zoomCtl.depthLive || 0) * zoomCtl.pxPerUnitScreen;
-        const wFade = THREE.MathUtils.smoothstep((Z - 1) / 0.15, 0, 1);
-        const maxCy = window.innerHeight - (zoomCtl.padPx || 0) - Z * depthPx * wFade;
-        if (C.y > maxCy) C.y = maxCy;
-    }
+    // NO live clamps here: the start frame already reserves the full vertical
+    // envelope (down-stretch + upswing), so the camera path is a pure similarity
+    // interpolation — zero vertical wobble during flight and oscillations.
     const O = { x: C.x - Z * Mw.x, y: C.y - Z * Mw.y };
     const wrap = layoutWrap();
     if (wrap) wrap.style.transform = `translate(${O.x}px, ${O.y}px) scale(${Z})`;
@@ -1950,15 +1946,15 @@ function zoomInit() {
     const pxPerUnitScreen = zoomCtl.sL * zoomCtl.canvasPxPerUnit;
     zoomCtl.pxPerUnitScreen = pxPerUnitScreen;
     zoomCtl.padPx = Math.min(window.innerWidth, window.innerHeight) * CONFIG.intro.edgePadFrac;
-    zoomCtl.depthLive = 0;
     const R = CONFIG.membrane.radius;
     const rimFullWidthPx = 2 * R * pxPerUnitScreen;
     const rimHalfHeightPx = R * pxPerUnitScreen * Math.abs(Math.sin(
         THREE.MathUtils.degToRad(CONFIG.scene.membraneTilt)
     ));
-    const envDeepFullPx = CONFIG.rupture.maxDepth * pxPerUnitScreen;
+    const envDeepPx = CONFIG.rupture.maxDepth * CONFIG.intro.envDownFrac * pxPerUnitScreen;
+    const envUpPx = CONFIG.intro.envUpUnits * pxPerUnitScreen;
     const vw = window.innerWidth, vh = window.innerHeight;
-    const fit = computeStartFit(rimFullWidthPx, rimHalfHeightPx, envDeepFullPx);
+    const fit = computeStartFit(rimFullWidthPx, rimHalfHeightPx, envDeepPx, envUpPx);
     zoomCtl.Z0 = fit.Z;
     zoomCtl.C0 = { x: vw / 2, y: fit.cy };
     zoomCtl.lnZ0 = Math.log(zoomCtl.Z0);
@@ -1986,10 +1982,6 @@ function symmetricEase(x, e) {
 function updateZoom(dt) {
     const zc = zoomCtl, cfg = CONFIG.intro;
     if (zc.phase === 'idle') return;
-    // Track the real tension depth: instant attack, slow release (units/s).
-    const dNow = deepestFreeDepth();
-    const release = 1.2;
-    zc.depthLive = Math.max(dNow, (zc.depthLive || 0) - release * dt);
     zc.tGlobal += dt;
     // Before parking: HOLD at Z0. The flight phase has variable length (screen
     // height decides when the ball reaches the film), so nothing is clocked
