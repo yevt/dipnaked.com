@@ -113,7 +113,8 @@ const CONFIG = {
         startHeight: 3.2,         // spawn height above the film (along +normal)
         speed: 0.55,              // units/s along -normal (slow, comet-like)
         exitDistance: 10.0,       // despawn this far below the film — large enough so the ball keeps falling until it's clearly off-screen
-        capWrap: 0.95,            // fraction of the ball's footprint kept on the sphere surface (with slip) — the tip mirrors the ball's curvature instead of pinching flat
+        capWrap: 0.0,             // fraction of the ball's footprint kept on the sphere surface (with slip). 0 = off — natural drape via collision + tension
+        centerPin: false,         // hard-pin the film's center vertex to the ball's leading pole. OFF: the film drapes the sphere naturally — the tip mirrors the ball instead of pinching into the pole point
         color: '#33dcf0',         // matches the sphere as drawn in the logo art
     },
     // rupture.maxDepth is a hard failsafe. With tougher material we need more room to stretch
@@ -915,7 +916,7 @@ function physicsStep(dt) {
             // Once the point reaches the center vertex, that contact holds
             // (the point presses the film in front of it) until punch-through.
             if (!ballStuck && ballPos.y - r <= pos[1]) { ballStuck = true; buildCapWrap(r); }
-            if (ballStuck) {
+            if (ballStuck && CONFIG.ball.centerPin) {
                 pos[0] = prev[0] = ballPos.x;
                 pos[1] = prev[1] = ballPos.y - r;
                 pos[2] = prev[2] = ballPos.z;
@@ -1459,7 +1460,8 @@ const PARAM_SCHEMA = [
         { key: 'startHeight', min: 0.5, max: 8, step: 0.1 },
         { key: 'speed', min: 0.05, max: 3, step: 0.01 },
         { key: 'exitDistance', min: 1, max: 20, step: 0.5, tip: 'World-units below the membrane at which the ball is despawned. Larger = it keeps falling further past the bottom of the screen before disappearing.' },
-        { key: 'capWrap', min: 0, max: 1.2, step: 0.05, tip: 'Fraction of the ball footprint kept on the sphere surface during approach (tangential slip allowed). The film tip mirrors the ball curvature instead of pinching flat. 0 = off (old point-pin behavior). Applies from the next drop.' },
+        { key: 'capWrap', min: 0, max: 1.2, step: 0.05, tip: 'Fraction of the ball footprint kept on the sphere surface during approach (tangential slip allowed). 0 = off: natural drape via collision + tension. Applies from the next drop.' },
+        { key: 'centerPin', bool: true, tip: 'Hard-pin the film center to the ball\u2019s leading pole. OFF lets the film drape the sphere naturally — round tip. Applies from the next drop.' },
         { key: 'color', color: true, apply: applyBallLook },
     ] },
     { id: 'rupture', title: 'rupture / healing', obj: () => CONFIG.rupture, params: [
@@ -1548,6 +1550,7 @@ function makeLockToggle(lockKey, what) {
 function syncLockButtons() { for (const { sync } of lockButtons.values()) sync(); }
 
 function randomValueFor(p) {
+    if (p.bool) return Math.random() < 0.5;
     if (p.color) {
         const c = new THREE.Color().setHSL(Math.random(), 0.4 + 0.6 * Math.random(), 0.25 + 0.5 * Math.random());
         return `#${c.getHexString()}`;
