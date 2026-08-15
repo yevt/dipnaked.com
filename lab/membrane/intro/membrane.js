@@ -1457,7 +1457,7 @@ const PARAM_SCHEMA = [
         { key: 'grip', min: 0, max: 1, step: 0.01 },
         { key: 'adhesionStrength', min: 0, max: 0.2, step: 0.002 },
         { key: 'adhesionZone', min: 0, max: 1, step: 0.01 },
-        { key: 'tearStrain', min: 0.1, max: 9, step: 0.05 },
+        { key: 'tearStrain', min: 0.1, max: 30, step: 0.05 },
         { key: 'tearCascade', min: 0.3, max: 1, step: 0.01 },
         { key: 'recoil', min: 0, max: 2, step: 0.01 },
         { key: 'healSpring', min: 1, max: 60, step: 0.5 },
