@@ -1333,11 +1333,17 @@ function tick(now) {
         // Fast-forward synchronously to the hold depth (immune to RAF throttling),
         // then freeze: render only, no physics, no phase clocks. Also stops at
         // the punch-through conditions so we never simulate past the rupture.
+        // Work is chunked per frame and capped by a total budget so a
+        // never-reached target can't livelock the page.
+        window.__holdSpent = window.__holdSpent || 0;
         let guard = 0;
-        while (-mem.pos[1] < HOLD_DEPTH
-            && mem.spokesBroken < mem.S * 0.5 && mem.brokenCount < mem.S * 2
-            && -mem.pos[1] < CONFIG.rupture.maxDepth
-            && guard++ < 30000) physicsStep(FIXED_DT);
+        if (!window.__holdDone) {
+            while (-mem.pos[1] < HOLD_DEPTH
+                && mem.spokesBroken < mem.S * 0.5 && mem.brokenCount < mem.S * 2
+                && -mem.pos[1] < CONFIG.rupture.maxDepth
+                && guard < 4000 && window.__holdSpent < 40000) { physicsStep(FIXED_DT); guard++; window.__holdSpent++; }
+            if (guard < 4000 || window.__holdSpent >= 40000) window.__holdDone = true;
+        }
         if (mem.needIndexRebuild) { rebuildIndex(); mem.needIndexRebuild = false; }
         if (ballEngaged) ballMesh.position.copy(ballPos);
         mem.geometry.attributes.position.needsUpdate = true;
@@ -1351,7 +1357,8 @@ function tick(now) {
         holdOverlay('ts ' + CONFIG.material.tearStrain.toFixed(2)
             + '  depth ' + (-mem.pos[1]).toFixed(3) + ' / ' + HOLD_DEPTH.toFixed(2)
             + '\nspokes ' + mem.spokesBroken + '/' + mem.S
-            + '  broken ' + mem.brokenCount + '  steps ' + guard);
+            + '  broken ' + mem.brokenCount + '  spent ' + window.__holdSpent
+            + (window.__holdDone ? ' done' : ' ...'));
         return;
     }
     accumulator += dt;
