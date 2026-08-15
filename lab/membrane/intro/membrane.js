@@ -1304,10 +1304,15 @@ const HOLD_DEPTH = (() => {
     return Number.isFinite(v) && v > 0 ? v : 0;
 })();
 
-// Debug: ?ts=<value> overrides material tearStrain at load (sweep tooling).
+// Debug: ?ts / ?adh / ?grip override material params at load (sweep tooling).
 (() => {
-    const v = parseFloat(new URLSearchParams(location.search).get('ts'));
-    if (Number.isFinite(v) && v > 0) CONFIG.material.tearStrain = v;
+    const q = new URLSearchParams(location.search);
+    const ts = parseFloat(q.get('ts'));
+    if (Number.isFinite(ts) && ts > 0) CONFIG.material.tearStrain = ts;
+    const adh = parseFloat(q.get('adh'));
+    if (Number.isFinite(adh) && adh >= 0) CONFIG.material.adhesionStrength = adh;
+    const grip = parseFloat(q.get('grip'));
+    if (Number.isFinite(grip) && grip >= 0) CONFIG.material.grip = grip;
 })();
 
 // Debug overlay for ?hold stills: numbers readable straight off a screenshot.
