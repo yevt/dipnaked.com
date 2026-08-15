@@ -1251,11 +1251,22 @@ function updateColors() {
 let accumulator = 0;
 let lastTime = performance.now();
 
+// Debug: ?hold=<depth> freezes the physics as soon as the center vertex
+// reaches that depth during APPROACH — a deterministic still of the deep tip.
+const HOLD_DEPTH = (() => {
+    const v = parseFloat(new URLSearchParams(location.search).get('hold'));
+    return Number.isFinite(v) && v > 0 ? v : 0;
+})();
+
 function tick(now) {
     requestAnimationFrame(tick);
     const rawDt = Math.min(0.1, (now - lastTime) / 1000);
     lastTime = now;
     const dt = rawDt * CONFIG.timing.timeScale;
+    if (HOLD_DEPTH > 0 && phase === Phase.APPROACH && -mem.pos[1] >= HOLD_DEPTH) {
+        renderer.render(scene, camera);
+        return; // frozen — render only, no physics, no phase clocks
+    }
     accumulator += dt;
     phaseTime += dt;
 
