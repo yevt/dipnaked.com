@@ -1341,8 +1341,8 @@ function tick(now) {
             while (-mem.pos[1] < HOLD_DEPTH
                 && mem.spokesBroken < mem.S * 0.5 && mem.brokenCount < mem.S * 2
                 && -mem.pos[1] < CONFIG.rupture.maxDepth
-                && guard < 1200 && window.__holdSpent < 20000) { physicsStep(FIXED_DT); guard++; window.__holdSpent++; }
-            if (guard < 1200 || window.__holdSpent >= 20000) window.__holdDone = true;
+                && guard < 300 && window.__holdSpent < 12000) { physicsStep(FIXED_DT); guard++; window.__holdSpent++; }
+            if (guard < 300 || window.__holdSpent >= 12000) window.__holdDone = true;
         }
         if (mem.needIndexRebuild) { rebuildIndex(); mem.needIndexRebuild = false; }
         if (ballEngaged) ballMesh.position.copy(ballPos);
