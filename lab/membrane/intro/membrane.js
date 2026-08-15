@@ -113,6 +113,8 @@ const CONFIG = {
         startHeight: 3.2,         // spawn height above the film (along +normal)
         speed: 0.55,              // units/s along -normal (slow, comet-like)
         exitDistance: 10.0,       // despawn this far below the film — large enough so the ball keeps falling until it's clearly off-screen
+        capWrap: 0.0,             // fraction of the ball's footprint kept on the sphere surface (with slip). 0 = off — natural drape via collision + tension
+        centerPin: false,         // hard-pin the film's center vertex to the ball's leading pole. OFF: the film drapes the sphere naturally — the tip mirrors the ball instead of pinching into the pole point
         color: '#33dcf0',         // matches the sphere as drawn in the logo art
     },
     // rupture.maxDepth is a hard failsafe. With tougher material we need more room to stretch
@@ -300,6 +302,7 @@ function buildMembrane() {
     const stick = new Uint8Array(count);         // sticky adhesion: vertex latched onto the ball
     const stickBan = new Uint8Array(count);      // detached by force this cycle → no re-latch
     const stickDir = new Float32Array(count * 3); // unit dir (ball center → contact spot)
+    const capFlag = new Uint8Array(count);       // leading-cap wrap: vertex stays on the sphere surface (with slip)
 
     const idx = (ring, seg) => ring === 0 ? 0 : 1 + (ring - 1) * S + ((seg % S + S) % S);
 
@@ -490,7 +493,7 @@ function buildMembrane() {
 
     mem = { R, S, count, home, pos, prev, ringOf, pinned, constraints, structCount, vertexCons,
             jitInvMass, geoInvMass, dampJit, stiffJit, wArr, brokenTouch, brokenCount: 0, spokesBroken: 0,
-            stick, stickBan, stickDir, stickCount: 0,
+            stick, stickBan, stickDir, stickCount: 0, capFlag,
             needIndexRebuild: false, tearRng: mulberry32(1),
             tris, geometry, mesh, material, depths, indexArr };
     buildJitter();
@@ -912,14 +915,15 @@ function physicsStep(dt) {
             const r2 = r * r;
             // Once the point reaches the center vertex, that contact holds
             // (the point presses the film in front of it) until punch-through.
-            if (!ballStuck && ballPos.y - r <= pos[1]) ballStuck = true;
-            if (ballStuck) {
+            if (!ballStuck && ballPos.y - r <= pos[1]) { ballStuck = true; buildCapWrap(r); }
+            if (ballStuck && CONFIG.ball.centerPin) {
                 pos[0] = prev[0] = ballPos.x;
                 pos[1] = prev[1] = ballPos.y - r;
                 pos[2] = prev[2] = ballPos.z;
                 wArr[0] = 0;
             }
-            const { stick, stickBan, stickDir } = mem;
+            const { stick, stickBan, stickDir, capFlag } = mem;
+            const capOn = ballStuck;
             const grip = mat.grip;
             const sticky = mat.adhesionStrength > 0 && mat.adhesionZone > 0;
             const rAtt2 = r * r * 1.05 * 1.05; // latch-on proximity (film sits on the surface)
@@ -928,6 +932,31 @@ function physicsStep(dt) {
             for (let i = 1; i < count; i++) {
                 if (pinned[i]) continue;
                 const j = i * 3;
+                if (capOn && capFlag[i]) {
+                    // Surface-attach with slip: film over the leading cap stays
+                    // ON the sphere (pulled in if it sags off, pushed out if it
+                    // penetrates) but slides tangentially — real latex feeds
+                    // around the ball, so tear timing stays natural and the tip
+                    // silhouette is the sphere itself, never a pinched disc.
+                    const cdx = pos[j] - ballPos.x;
+                    const cdy = pos[j + 1] - ballPos.y;
+                    const cdz = pos[j + 2] - ballPos.z;
+                    const cd2 = cdx * cdx + cdy * cdy + cdz * cdz;
+                    if (cd2 > 1e-12 && cdy < 0) {
+                        const cd = Math.sqrt(cd2);
+                        const ck = r / cd;
+                        pos[j] = ballPos.x + cdx * ck;
+                        pos[j + 1] = ballPos.y + cdy * ck;
+                        pos[j + 2] = ballPos.z + cdz * ck;
+                        if (grip > 0) {
+                            const stickV = grip * Math.max(0, -cdy / cd);
+                            prev[j] += (pos[j] - prev[j]) * stickV;
+                            prev[j + 1] += (pos[j + 1] + step - prev[j + 1]) * stickV;
+                            prev[j + 2] += (pos[j + 2] - prev[j + 2]) * stickV;
+                        }
+                        continue;
+                    }
+                }
                 if (sticky && stick[i]) {
                     // Detach test before re-projection: the drift accumulated
                     // since last step is the net pull of the springs against
@@ -1154,6 +1183,23 @@ function clearSticky() {
     mem.stick.fill(0);
     mem.stickBan.fill(0);
     mem.stickCount = 0;
+    if (mem.capFlag) mem.capFlag.fill(0);
+}
+
+// Mark the leading cap: every vertex whose rest position lies inside the
+// ball's footprint is film that should drape over the sphere. During the
+// approach these vertices are kept on the ball's surface (with tangential
+// slip), so the film tip mirrors the ball's curvature instead of pinching
+// into the pole point once the sticky latches let go.
+function buildCapWrap(r) {
+    const { home, capFlag, count } = mem;
+    capFlag.fill(0);
+    const maxHr = r * Math.max(0, CONFIG.ball.capWrap);
+    if (maxHr <= 0) return;
+    for (let i = 1; i < count; i++) {
+        const j = i * 3;
+        if (Math.hypot(home[j], home[j + 2]) <= maxHr) capFlag[i] = 1;
+    }
 }
 
 // Avalanche release: every stuck vertex lets go at once. The stored adhesion
@@ -1251,11 +1297,39 @@ function updateColors() {
 let accumulator = 0;
 let lastTime = performance.now();
 
+// Debug: ?hold=<depth> freezes the physics as soon as the center vertex
+// reaches that depth during APPROACH — a deterministic still of the deep tip.
+const HOLD_DEPTH = (() => {
+    const v = parseFloat(new URLSearchParams(location.search).get('hold'));
+    return Number.isFinite(v) && v > 0 ? v : 0;
+})();
+
 function tick(now) {
     requestAnimationFrame(tick);
     const rawDt = Math.min(0.1, (now - lastTime) / 1000);
     lastTime = now;
     const dt = rawDt * CONFIG.timing.timeScale;
+    if (HOLD_DEPTH > 0 && phase === Phase.APPROACH) {
+        // Fast-forward synchronously to the hold depth (immune to RAF throttling),
+        // then freeze: render only, no physics, no phase clocks. Also stops at
+        // the punch-through conditions so we never simulate past the rupture.
+        let guard = 0;
+        while (-mem.pos[1] < HOLD_DEPTH
+            && mem.spokesBroken < mem.S * 0.5 && mem.brokenCount < mem.S * 2
+            && -mem.pos[1] < CONFIG.rupture.maxDepth
+            && guard++ < 30000) physicsStep(FIXED_DT);
+        if (mem.needIndexRebuild) { rebuildIndex(); mem.needIndexRebuild = false; }
+        if (ballEngaged) ballMesh.position.copy(ballPos);
+        mem.geometry.attributes.position.needsUpdate = true;
+        updateColors();
+        renderer.render(scene, camera);
+        if (!window.__holdLogged) {
+            window.__holdLogged = true;
+            console.log('[hold] frozen', { depth: +(-mem.pos[1]).toFixed(3), target: HOLD_DEPTH,
+                spokes: mem.spokesBroken, broken: mem.brokenCount, steps: guard });
+        }
+        return;
+    }
     accumulator += dt;
     phaseTime += dt;
 
@@ -1394,6 +1468,8 @@ const PARAM_SCHEMA = [
         { key: 'startHeight', min: 0.5, max: 8, step: 0.1 },
         { key: 'speed', min: 0.05, max: 3, step: 0.01 },
         { key: 'exitDistance', min: 1, max: 20, step: 0.5, tip: 'World-units below the membrane at which the ball is despawned. Larger = it keeps falling further past the bottom of the screen before disappearing.' },
+        { key: 'capWrap', min: 0, max: 1.2, step: 0.05, tip: 'Fraction of the ball footprint kept on the sphere surface during approach (tangential slip allowed). 0 = off: natural drape via collision + tension. Applies from the next drop.' },
+        { key: 'centerPin', bool: true, tip: 'Hard-pin the film center to the ball\u2019s leading pole. OFF lets the film drape the sphere naturally — round tip. Applies from the next drop.' },
         { key: 'color', color: true, apply: applyBallLook },
     ] },
     { id: 'rupture', title: 'rupture / healing', obj: () => CONFIG.rupture, params: [
@@ -1482,6 +1558,7 @@ function makeLockToggle(lockKey, what) {
 function syncLockButtons() { for (const { sync } of lockButtons.values()) sync(); }
 
 function randomValueFor(p) {
+    if (p.bool) return Math.random() < 0.5;
     if (p.color) {
         const c = new THREE.Color().setHSL(Math.random(), 0.4 + 0.6 * Math.random(), 0.25 + 0.5 * Math.random());
         return `#${c.getHexString()}`;
