@@ -1304,6 +1304,26 @@ const HOLD_DEPTH = (() => {
     return Number.isFinite(v) && v > 0 ? v : 0;
 })();
 
+// Debug: ?ts=<value> overrides material tearStrain at load (sweep tooling).
+(() => {
+    const v = parseFloat(new URLSearchParams(location.search).get('ts'));
+    if (Number.isFinite(v) && v > 0) CONFIG.material.tearStrain = v;
+})();
+
+// Debug overlay for ?hold stills: numbers readable straight off a screenshot.
+function holdOverlay(text) {
+    let el = document.getElementById('hold-overlay');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'hold-overlay';
+        el.style.cssText = 'position:fixed;left:12px;top:12px;z-index:99;' +
+            'font:16px/1.4 monospace;color:#9ff;background:rgba(0,0,0,.55);' +
+            'padding:6px 10px;pointer-events:none;white-space:pre';
+        document.body.appendChild(el);
+    }
+    el.textContent = text;
+}
+
 function tick(now) {
     requestAnimationFrame(tick);
     const rawDt = Math.min(0.1, (now - lastTime) / 1000);
@@ -1328,6 +1348,10 @@ function tick(now) {
             console.log('[hold] frozen', { depth: +(-mem.pos[1]).toFixed(3), target: HOLD_DEPTH,
                 spokes: mem.spokesBroken, broken: mem.brokenCount, steps: guard });
         }
+        holdOverlay('ts ' + CONFIG.material.tearStrain.toFixed(2)
+            + '  depth ' + (-mem.pos[1]).toFixed(3) + ' / ' + HOLD_DEPTH.toFixed(2)
+            + '\nspokes ' + mem.spokesBroken + '/' + mem.S
+            + '  broken ' + mem.brokenCount + '  steps ' + guard);
         return;
     }
     accumulator += dt;
