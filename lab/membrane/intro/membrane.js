@@ -184,7 +184,7 @@ const CONFIG = {
         //      from Z0 to the logo (Z=1) in sDuration seconds. The film keeps its
         //      free physics all the way; only at the very end (endAttractorLead
         //      before landing) the attractor may grab it — right before fadeout.
-        postPierceHold: 1.0,      // s after the pierce before parking starts (measured: full upswing ≈ 0.9s)
+        postPierceHold: 3.0,      // s after the pierce before parking starts — let the film live through a full swing cycle or two
         sDuration: 8.0,           // s — length of the parking S-curve (ends exactly on the logo, p=1)
         sEase: 3,                 // 2..6 — ease exponent (2=quadratic, 3=cubic, 5=smootherstep-like)
         edgePadPx: 1,             // ball spawn: how many px BELOW the top screen edge (visible immediately)
