@@ -113,7 +113,7 @@ const CONFIG = {
         startHeight: 3.2,         // spawn height above the film (along +normal)
         speed: 0.55,              // units/s along -normal (slow, comet-like)
         exitDistance: 10.0,       // despawn this far below the film — large enough so the ball keeps falling until it's clearly off-screen
-        capWrap: 0.95,            // fraction of the ball's footprint that stays glued to the sphere — the tip mirrors the ball's curvature instead of pinching flat
+        capWrap: 0.95,            // fraction of the ball's footprint kept on the sphere surface (with slip) — the tip mirrors the ball's curvature instead of pinching flat
         color: '#33dcf0',         // matches the sphere as drawn in the logo art
     },
     // rupture.maxDepth is a hard failsafe. With tougher material we need more room to stretch
@@ -301,8 +301,7 @@ function buildMembrane() {
     const stick = new Uint8Array(count);         // sticky adhesion: vertex latched onto the ball
     const stickBan = new Uint8Array(count);      // detached by force this cycle → no re-latch
     const stickDir = new Float32Array(count * 3); // unit dir (ball center → contact spot)
-    const capFlag = new Uint8Array(count);       // leading-cap wrap: vertex rides the sphere at a fixed mapped spot
-    const capDir = new Float32Array(count * 3);  // unit dir (ball center → mapped spot) for cap-wrapped vertices
+    const capFlag = new Uint8Array(count);       // leading-cap wrap: vertex stays on the sphere surface (with slip)
 
     const idx = (ring, seg) => ring === 0 ? 0 : 1 + (ring - 1) * S + ((seg % S + S) % S);
 
@@ -493,7 +492,7 @@ function buildMembrane() {
 
     mem = { R, S, count, home, pos, prev, ringOf, pinned, constraints, structCount, vertexCons,
             jitInvMass, geoInvMass, dampJit, stiffJit, wArr, brokenTouch, brokenCount: 0, spokesBroken: 0,
-            stick, stickBan, stickDir, stickCount: 0, capFlag, capDir,
+            stick, stickBan, stickDir, stickCount: 0, capFlag,
             needIndexRebuild: false, tearRng: mulberry32(1),
             tris, geometry, mesh, material, depths, indexArr };
     buildJitter();
@@ -922,7 +921,7 @@ function physicsStep(dt) {
                 pos[2] = prev[2] = ballPos.z;
                 wArr[0] = 0;
             }
-            const { stick, stickBan, stickDir, capFlag, capDir } = mem;
+            const { stick, stickBan, stickDir, capFlag } = mem;
             const capOn = ballStuck;
             const grip = mat.grip;
             const sticky = mat.adhesionStrength > 0 && mat.adhesionZone > 0;
@@ -933,14 +932,29 @@ function physicsStep(dt) {
                 if (pinned[i]) continue;
                 const j = i * 3;
                 if (capOn && capFlag[i]) {
-                    // Cap-wrapped: ride the sphere at the mapped spot, co-moving
-                    // with the ball (Verlet velocity = ball velocity).
-                    const tx = ballPos.x + capDir[j] * r;
-                    const ty = ballPos.y + capDir[j + 1] * r;
-                    const tz = ballPos.z + capDir[j + 2] * r;
-                    pos[j] = tx; pos[j + 1] = ty; pos[j + 2] = tz;
-                    prev[j] = tx; prev[j + 1] = ty + step; prev[j + 2] = tz;
-                    continue;
+                    // Surface-attach with slip: film over the leading cap stays
+                    // ON the sphere (pulled in if it sags off, pushed out if it
+                    // penetrates) but slides tangentially — real latex feeds
+                    // around the ball, so tear timing stays natural and the tip
+                    // silhouette is the sphere itself, never a pinched disc.
+                    const cdx = pos[j] - ballPos.x;
+                    const cdy = pos[j + 1] - ballPos.y;
+                    const cdz = pos[j + 2] - ballPos.z;
+                    const cd2 = cdx * cdx + cdy * cdy + cdz * cdz;
+                    if (cd2 > 1e-12 && cdy < 0) {
+                        const cd = Math.sqrt(cd2);
+                        const ck = r / cd;
+                        pos[j] = ballPos.x + cdx * ck;
+                        pos[j + 1] = ballPos.y + cdy * ck;
+                        pos[j + 2] = ballPos.z + cdz * ck;
+                        if (grip > 0) {
+                            const stickV = grip * Math.max(0, -cdy / cd);
+                            prev[j] += (pos[j] - prev[j]) * stickV;
+                            prev[j + 1] += (pos[j + 1] + step - prev[j + 1]) * stickV;
+                            prev[j + 2] += (pos[j + 2] - prev[j + 2]) * stickV;
+                        }
+                        continue;
+                    }
                 }
                 if (sticky && stick[i]) {
                     // Detach test before re-projection: the drift accumulated
@@ -1171,28 +1185,19 @@ function clearSticky() {
     if (mem.capFlag) mem.capFlag.fill(0);
 }
 
-// Glue the leading cap: every vertex whose rest position lies inside the
-// ball's footprint gets a fixed spot on the sphere via arc-length mapping
-// (a disc of radius hr drapes onto the sphere at polar angle hr/r). These
-// vertices co-move with the ball for the whole approach, so the film tip
-// mirrors the ball's curvature instead of pinching into the pole point.
+// Mark the leading cap: every vertex whose rest position lies inside the
+// ball's footprint is film that should drape over the sphere. During the
+// approach these vertices are kept on the ball's surface (with tangential
+// slip), so the film tip mirrors the ball's curvature instead of pinching
+// into the pole point once the sticky latches let go.
 function buildCapWrap(r) {
-    const { home, capFlag, capDir, count } = mem;
+    const { home, capFlag, count } = mem;
     capFlag.fill(0);
     const maxHr = r * Math.max(0, CONFIG.ball.capWrap);
     if (maxHr <= 0) return;
     for (let i = 1; i < count; i++) {
         const j = i * 3;
-        const hx = home[j], hz = home[j + 2];
-        const hr = Math.hypot(hx, hz);
-        if (hr > maxHr) continue;
-        const theta = hr / r;                 // arc-length mapping onto the sphere
-        const phi = Math.atan2(hz, hx);
-        const s = Math.sin(theta);
-        capFlag[i] = 1;
-        capDir[j] = s * Math.cos(phi);
-        capDir[j + 1] = -Math.cos(theta);
-        capDir[j + 2] = s * Math.sin(phi);
+        if (Math.hypot(home[j], home[j + 2]) <= maxHr) capFlag[i] = 1;
     }
 }
 
@@ -1454,7 +1459,7 @@ const PARAM_SCHEMA = [
         { key: 'startHeight', min: 0.5, max: 8, step: 0.1 },
         { key: 'speed', min: 0.05, max: 3, step: 0.01 },
         { key: 'exitDistance', min: 1, max: 20, step: 0.5, tip: 'World-units below the membrane at which the ball is despawned. Larger = it keeps falling further past the bottom of the screen before disappearing.' },
-        { key: 'capWrap', min: 0, max: 1.2, step: 0.05, tip: 'Fraction of the ball footprint glued to the sphere during approach. The film tip mirrors the ball curvature instead of pinching flat. 0 = off (old point-pin behavior). Applies from the next drop.' },
+        { key: 'capWrap', min: 0, max: 1.2, step: 0.05, tip: 'Fraction of the ball footprint kept on the sphere surface during approach (tangential slip allowed). The film tip mirrors the ball curvature instead of pinching flat. 0 = off (old point-pin behavior). Applies from the next drop.' },
         { key: 'color', color: true, apply: applyBallLook },
     ] },
     { id: 'rupture', title: 'rupture / healing', obj: () => CONFIG.rupture, params: [
