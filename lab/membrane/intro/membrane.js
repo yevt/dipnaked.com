@@ -159,10 +159,10 @@ const CONFIG = {
     // healing back to flat, the film settles into the logo funnel.
     // ------------------------------------------------------------------------
     intro: {
-        enabled: true,            // master switch — after the pierce the film settles into the logo funnel (no chaotic flapping)
-        autoTrigger: true,        // switch to attract mode automatically at PIERCED
-        triggerDelay: 0.35,       // s after PIERCED before attractor engages (let recoil breathe)
-        rampDuration: 1.2,        // s to ramp attractor strength from 0 → full
+        enabled: true,            // master switch for the attractor machinery (physics hook + manual snap)
+        endAttractor: true,       // engage the attractor ONLY at the very end of parking, right before the fadeout
+        endAttractorLead: 1.6,    // s before landing when the attractor starts ramping in (covers attractorRamp)
+        attractorRamp: 1.2,       // s to ramp attractor strength from 0 → full
         strength: 32,             // full attractor spring constant (1/s^2)
         damping: 0.965,           // node damping during attract mode (kills residual sway)
         funnelDepth: 1.15,        // depth of the funnel neck (units along -Y)
@@ -173,19 +173,20 @@ const CONFIG = {
         // -- self-calibrating continuous zoom-out (see updateZoom for the math) --
         edgePadFrac: 0.03,        // safety pad (fraction of the SHORT viewport side) around the physics envelope
         envelopeShrink: 0.62,     // fraction of rupture.maxDepth used to size the start envelope (smaller = less vertical stretch)
-        // === CAMERA CURVE ===
-        // Progress p(t) is normalized 0..1: p=0 at t=0 (camera at Z0, farthest), p=1 at end (Z=1, on the logo).
-        // Two joined pieces:
-        //   [0, rampDuration]: LINEAR ramp — p grows at rampSlope per second (very gentle start)
-        //   [rampDuration, rampDuration+sDuration]: SYMMETRIC S-curve from where the ramp left off to p=1
-        // Total intro duration = rampDuration + sDuration. The S-curve always finishes at p=1.
-        rampDuration: 3.0,        // s — how long the very slow linear ramp lasts (the "held" first part)
-        rampSlope: 0.02,          // p/s during the ramp (0.02 ⇒ 6% of the way covered in 3s)
-        sDuration: 8.0,           // s — how long the symmetric S-curve tail lasts (must end at p=1)
+        // === CAMERA / PARKING (event-anchored timeline) ===
+        // Three phases:
+        //   1. FLIGHT (variable length — depends on viewport height): ball falls,
+        //      touches the film, stretches it. Camera HOLDS at Z0 the whole time.
+        //   2. OSCILLATIONS (fixed): pierce → recoil → one FULL upswing. Measured
+        //      on the reference run: the upswing peaks ~0.9s after the pierce.
+        //   3. PARKING (fixed): starts on the way DOWN from that full upswing, at
+        //      pierce + postPierceHold. One symmetric S-curve takes the camera
+        //      from Z0 to the logo (Z=1) in sDuration seconds. The film keeps its
+        //      free physics all the way; only at the very end (endAttractorLead
+        //      before landing) the attractor may grab it — right before fadeout.
+        postPierceHold: 1.0,      // s after the pierce before parking starts (measured: full upswing ≈ 0.9s)
+        sDuration: 8.0,           // s — length of the parking S-curve (ends exactly on the logo, p=1)
         sEase: 3,                 // 2..6 — ease exponent (2=quadratic, 3=cubic, 5=smootherstep-like)
-        upswingTrigger: 0.15,     // membrane must climb at least this high (units) before we count "first upswing"
-        upswingHysteresis: 0.02,  // and then drop this much from its peak to lock the upswing moment
-        upswingFallbackTime: 6.0, // s inside PIERCED after which we force the transition (failsafe — unused now)
         edgePadPx: 1,             // ball spawn: how many px BELOW the top screen edge (visible immediately)
         layoutLiftPx: 11,         // lift of .center-block to balance the logo art's internal top padding
         logoRimWidthFrac: 0.84,   // rim ellipse width as a fraction of the logo image square
@@ -843,11 +844,11 @@ function physicsStep(dt) {
         healK = mat.healSpring * ramp * ramp;
     }
 
-    // Intro attractor: ramp its strength from 0 → full over rampDuration.
+    // Intro attractor: ramp its strength from 0 → full over attractorRamp.
     let attractK = 0;
     if (introActive) {
         const elapsed = (performance.now() / 1000) - introState.startTime;
-        const ramp = Math.min(1, Math.max(0, elapsed / Math.max(0.01, introCfg.rampDuration)));
+        const ramp = Math.min(1, Math.max(0, elapsed / Math.max(0.01, introCfg.attractorRamp)));
         // Smoothstep for a soft take-off (no visible knee when it engages).
         const s = ramp * ramp * (3 - 2 * ramp);
         attractK = introCfg.strength * s;
@@ -1274,9 +1275,11 @@ function tick(now) {
                 setPhase(Phase.PIERCED);
             }
         } else if (phase === Phase.PIERCED) {
-            // Auto-arm the intro attractor after a brief delay so the recoil is visible.
-            if (CONFIG.intro.enabled && CONFIG.intro.autoTrigger && !introState.active) {
-                if (phaseTime >= CONFIG.intro.triggerDelay) engageIntro();
+            // PARKING starts on the way down from the full upswing: pierce + postPierceHold.
+            // (No attractor here — the film keeps its free physics; only the camera moves.)
+            if (zoomCtl.phase === 'slow' && zoomCtl.parkingT0 < 0
+                && phaseTime >= CONFIG.intro.postPierceHold) {
+                zoomCtl.parkingT0 = zoomCtl.tGlobal;
             }
             // In one-shot / intro modes we never re-knit — the film keeps sloshing (or attractor holds).
             const suppressHeal = CONFIG.intro.enabled || CONFIG.intro.oneShot;
@@ -1423,8 +1426,8 @@ const PARAM_SCHEMA = [
         { key: 'restPause', min: 0, max: 5, step: 0.1 },
     ] },
     { id: 'intro', title: 'intro (attractor → logo)', obj: () => CONFIG.intro, params: [
-        { key: 'triggerDelay', min: 0, max: 3, step: 0.05 },
-        { key: 'rampDuration', min: 0.1, max: 5, step: 0.05 },
+        { key: 'endAttractorLead', min: 0, max: 5, step: 0.1 },
+        { key: 'attractorRamp', min: 0.1, max: 5, step: 0.05 },
         { key: 'strength', min: 1, max: 200, step: 1 },
         { key: 'damping', min: 0.85, max: 1, step: 0.001 },
         { key: 'funnelDepth', min: 0.2, max: 3, step: 0.05 },
@@ -1433,14 +1436,11 @@ const PARAM_SCHEMA = [
         { key: 'funnelRimFlat', min: 0, max: 0.9, step: 0.02 },
         { key: 'edgePadFrac', min: 0, max: 0.25, step: 0.01, tip: 'Safety pad around the physics envelope, as a fraction of the SHORT viewport side. Larger = the whole tension cone sits further from the screen edges.' },
         { key: 'envelopeShrink', min: 0.3, max: 1.0, step: 0.02, tip: 'Fraction of rupture.maxDepth used to size the start envelope. Smaller = camera starts closer, membrane visually stretches LESS by the end.' },
-        { key: 'rampDuration', min: 0, max: 8, step: 0.1, tip: 'How long (seconds) the very slow LINEAR ramp lasts at the start of the intro. Longer = the camera “holds” in place at the deepest zoom.' },
-        { key: 'rampSlope', min: 0, max: 0.15, step: 0.005, tip: 'Progress-per-second during the ramp. 0.02 means only ~6% of the total motion is covered in 3 s. Bigger = the ramp is less pologe.' },
+        { key: 'postPierceHold', min: 0, max: 4, step: 0.05, tip: 'Seconds after the pierce before parking (the zoom-out) starts. Measured: the full upswing peaks ≈0.9s after the pierce — parking begins on the way down.' },
         { key: 'sDuration', min: 1, max: 15, step: 0.1, tip: 'How long (seconds) the symmetric S-curve tail lasts. The S ALWAYS ends on the logo, so this only reshapes the tail’s pace.' },
         { key: 'sEase', min: 2, max: 6, step: 1, tip: 'Symmetric ease exponent for the S-curve. 2 = quadratic in/out (softest), 3 = cubic (default), 5 = smootherstep-like (steepest middle).' },
         { key: 'edgePadPx', min: 0, max: 30, step: 1, tip: 'How far below the top viewport edge the ball spawns, in CSS pixels. 1 = just barely visible at the very first frame.' },
-        { key: 'upswingTrigger', min: 0.02, max: 0.8, step: 0.01, tip: 'Membrane must climb at least this many world-units after rupture before the “first upswing” moment is registered (used by the timing bookkeeping; safe to leave alone).' },
-        { key: 'upswingHysteresis', min: 0, max: 0.2, step: 0.005, tip: 'The membrane must drop back by this many units from its peak to lock the upswing moment.' },
-        { key: 'upswingFallbackTime', min: 1, max: 15, step: 0.5, tip: 'Failsafe: if the upswing is never detected, this many seconds after rupture forces the transition.' },
+
         { key: 'layoutLiftPx', min: -60, max: 60, step: 1, apply: applyLayoutLift },
         { key: 'logoRimWidthFrac', min: 0.5, max: 1, step: 0.01 },
         { key: 'logoRimTopFrac', min: 0, max: 0.5, step: 0.01 },
@@ -1723,10 +1723,8 @@ const zoomCtl = {
     rimWw: 1,                  // rim width in world px
     spawnH: 0,                 // computed ball spawn height (world units)
     canvasPxPerUnit: 0,        // native canvas px per world unit at membrane center (unzoomed)
-    // upswing detector (drives the ONE speed change)
-    peakY: -Infinity, rising: false, tPierced: -1, tUpswing: -1,
+    parkingT0: -1,             // tGlobal at which parking (the S-curve flight) started; -1 = still holding at Z0
     tGlobal: 0,                // seconds since zoomInit
-    tail: null,                // frozen cubic-Hermite tail: { lnZ0, D, a, b, c }
     fadeTimer: 0,
 };
 
@@ -1966,12 +1964,8 @@ function zoomInit() {
     zoomCtl.lnZ0 = Math.log(zoomCtl.Z0);
     zoomCtl.lnZ = zoomCtl.lnZ0;
     zoomCtl.Z = zoomCtl.Z0;
-    zoomCtl.peakY = -Infinity;
-    zoomCtl.rising = false;
-    zoomCtl.tPierced = -1;
-    zoomCtl.tUpswing = -1;
+    zoomCtl.parkingT0 = -1;
     zoomCtl.tGlobal = 0;
-    zoomCtl.tail = null;
     zoomCtl.spawnH = computeSpawnHeight();
     zoomCtl.phase = 'slow';
     applyZoom();
@@ -1979,31 +1973,14 @@ function zoomInit() {
 
 const smoothstep = (t) => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
 
-// Symmetric ease-in-out from p0 to 1 over x∈[0,1], with adjustable exponent.
-// Both endpoints match slope on their own side (S-shape), and starting slope
-// at x=0 is 0 — which is what makes the join to the ramp continuous only if
-// the ramp's endpoint slope is compensated. We compensate by remapping the
-// S-curve's x so that its instantaneous rate at x=0 equals rampSlope.
+// Symmetric ease-in-out over x∈[0,1] with adjustable exponent — the parking
+// S-curve: starts and ends with zero slope, steepest in the middle.
 function symmetricEase(x, e) {
     // Piecewise symmetric ease: 2^(e-1) * x^e  for x<0.5,  1 - 2^(e-1)*(1-x)^e  for x>=0.5.
     // e=2 -> quadratic in/out, e=3 -> cubic, e=5 -> near-smootherstep.
     x = Math.max(0, Math.min(1, x));
     const k = Math.pow(2, e - 1);
     return x < 0.5 ? k * Math.pow(x, e) : 1 - k * Math.pow(1 - x, e);
-}
-
-// Progress at time t, per the camera-curve model documented above.
-function cameraProgress(t, cfg) {
-    const rampT = Math.max(0, cfg.rampDuration);
-    const sT = Math.max(0.01, cfg.sDuration);
-    if (t <= rampT) {
-        return Math.max(0, Math.min(1, cfg.rampSlope * t));
-    }
-    const pRampEnd = Math.max(0, Math.min(1, cfg.rampSlope * rampT));
-    const x = Math.min(1, (t - rampT) / sT);
-    // Symmetric ease from pRampEnd to 1.
-    const eased = symmetricEase(x, cfg.sEase);
-    return pRampEnd + (1 - pRampEnd) * eased;
 }
 
 function updateZoom(dt) {
@@ -2014,12 +1991,22 @@ function updateZoom(dt) {
     const release = 1.2;
     zc.depthLive = Math.max(dNow, (zc.depthLive || 0) - release * dt);
     zc.tGlobal += dt;
-    const T = Math.max(0.5, (cfg.rampDuration || 0) + (cfg.sDuration || 0));
-    const p = cameraProgress(zc.tGlobal, cfg);
+    // Before parking: HOLD at Z0. The flight phase has variable length (screen
+    // height decides when the ball reaches the film), so nothing is clocked
+    // from page load — parking is armed by the physics (pierce + postPierceHold).
+    if (zc.parkingT0 < 0) { applyZoom(); return; }
+    const sT = Math.max(0.5, cfg.sDuration);
+    const x = Math.min(1, (zc.tGlobal - zc.parkingT0) / sT);
+    const p = symmetricEase(x, cfg.sEase);
     zc.lnZ = Math.max(0, zc.lnZ0 * (1 - p));
     zc.Z = Math.exp(zc.lnZ);
-    const t = Math.min(1, zc.tGlobal / T);
-    if (t >= 1 && zc.phase !== 'landed') {
+    // End-of-parking attractor: engage just before landing so the film settles
+    // into the logo funnel right before the fadeout — not a moment earlier.
+    if (cfg.enabled && cfg.endAttractor && !introState.active
+        && (sT - (zc.tGlobal - zc.parkingT0)) <= Math.max(0, cfg.endAttractorLead)) {
+        engageIntro();
+    }
+    if (x >= 1 && zc.phase !== 'landed') {
         zc.lnZ = 0; zc.Z = 1;
         zc.phase = 'landed';
         scheduleCrossfade();
@@ -2095,7 +2082,7 @@ function snapToFunnel() {
     setPhase(Phase.PIERCED);
     engageIntro();
     // Push the ramp past full so damping wins immediately.
-    introState.startTime = (performance.now() / 1000) - (CONFIG.intro.rampDuration + 0.5);
+    introState.startTime = (performance.now() / 1000) - (CONFIG.intro.attractorRamp + 0.5);
 }
 try {
     const q = new URLSearchParams(location.search);
