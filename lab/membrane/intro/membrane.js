@@ -47,9 +47,9 @@ const MATERIALS = {
         damping: 0.99992,      // internal velocity keep-factor (very near-1 → near-lossless sway)
         massScale: 1.0,        // node inertia vs impulses (recoil, heal springs)
         grip: 0.6,             // tangential drag on non-stuck contact vertices 0..1
-        adhesionStrength: 0.05, // sticky-contact detach threshold (drift, units); 0 = no sticking
+        adhesionStrength: 0.14, // sticky-contact detach threshold (drift, units); 0 = no sticking — strong cling: the film drapes the sphere instead of slipping off, so the pre-burst stretch runs deep (~2.5)
         adhesionZone: 0.8,     // fraction of the leading hemisphere where vertices may latch on
-        tearStrain: 8.9,       // strain that snaps a link — ~15% weaker than before so the film ruptures earlier and never over-stretches
+        tearStrain: 11,        // strain that snaps a link — paired with the stronger adhesion this puts the natural spoke-avalanche burst at ~2.5 depth
         tearCascade: 0.8,      // neighbour threshold multiplier after a snap (unzip)
         recoil: 0.55,          // snap-back impulse per unit strain
         healSpring: 14,        // home-spring stiffness at full heal ramp (1/s²)
@@ -1304,6 +1304,31 @@ const HOLD_DEPTH = (() => {
     return Number.isFinite(v) && v > 0 ? v : 0;
 })();
 
+// Debug: ?ts / ?adh / ?grip override material params at load (sweep tooling).
+(() => {
+    const q = new URLSearchParams(location.search);
+    const ts = parseFloat(q.get('ts'));
+    if (Number.isFinite(ts) && ts > 0) CONFIG.material.tearStrain = ts;
+    const adh = parseFloat(q.get('adh'));
+    if (Number.isFinite(adh) && adh >= 0) CONFIG.material.adhesionStrength = adh;
+    const grip = parseFloat(q.get('grip'));
+    if (Number.isFinite(grip) && grip >= 0) CONFIG.material.grip = grip;
+})();
+
+// Debug overlay for ?hold stills: numbers readable straight off a screenshot.
+function holdOverlay(text) {
+    let el = document.getElementById('hold-overlay');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'hold-overlay';
+        el.style.cssText = 'position:fixed;left:12px;top:12px;z-index:99;' +
+            'font:16px/1.4 monospace;color:#9ff;background:rgba(0,0,0,.55);' +
+            'padding:6px 10px;pointer-events:none;white-space:pre';
+        document.body.appendChild(el);
+    }
+    el.textContent = text;
+}
+
 function tick(now) {
     requestAnimationFrame(tick);
     const rawDt = Math.min(0.1, (now - lastTime) / 1000);
@@ -1313,11 +1338,17 @@ function tick(now) {
         // Fast-forward synchronously to the hold depth (immune to RAF throttling),
         // then freeze: render only, no physics, no phase clocks. Also stops at
         // the punch-through conditions so we never simulate past the rupture.
+        // Work is chunked per frame and capped by a total budget so a
+        // never-reached target can't livelock the page.
+        window.__holdSpent = window.__holdSpent || 0;
         let guard = 0;
-        while (-mem.pos[1] < HOLD_DEPTH
-            && mem.spokesBroken < mem.S * 0.5 && mem.brokenCount < mem.S * 2
-            && -mem.pos[1] < CONFIG.rupture.maxDepth
-            && guard++ < 30000) physicsStep(FIXED_DT);
+        if (!window.__holdDone) {
+            while (-mem.pos[1] < HOLD_DEPTH
+                && mem.spokesBroken < mem.S * 0.5 && mem.brokenCount < mem.S * 2
+                && -mem.pos[1] < CONFIG.rupture.maxDepth
+                && guard < 300 && window.__holdSpent < 12000) { physicsStep(FIXED_DT); guard++; window.__holdSpent++; }
+            if (guard < 300 || window.__holdSpent >= 12000) window.__holdDone = true;
+        }
         if (mem.needIndexRebuild) { rebuildIndex(); mem.needIndexRebuild = false; }
         if (ballEngaged) ballMesh.position.copy(ballPos);
         mem.geometry.attributes.position.needsUpdate = true;
@@ -1328,6 +1359,11 @@ function tick(now) {
             console.log('[hold] frozen', { depth: +(-mem.pos[1]).toFixed(3), target: HOLD_DEPTH,
                 spokes: mem.spokesBroken, broken: mem.brokenCount, steps: guard });
         }
+        holdOverlay('ts ' + CONFIG.material.tearStrain.toFixed(2)
+            + '  depth ' + (-mem.pos[1]).toFixed(3) + ' / ' + HOLD_DEPTH.toFixed(2)
+            + '\nspokes ' + mem.spokesBroken + '/' + mem.S
+            + '  broken ' + mem.brokenCount + '  spent ' + window.__holdSpent
+            + (window.__holdDone ? ' done' : ' ...'));
         return;
     }
     accumulator += dt;
@@ -1457,7 +1493,7 @@ const PARAM_SCHEMA = [
         { key: 'grip', min: 0, max: 1, step: 0.01 },
         { key: 'adhesionStrength', min: 0, max: 0.2, step: 0.002 },
         { key: 'adhesionZone', min: 0, max: 1, step: 0.01 },
-        { key: 'tearStrain', min: 0.1, max: 9, step: 0.05 },
+        { key: 'tearStrain', min: 0.1, max: 30, step: 0.05 },
         { key: 'tearCascade', min: 0.3, max: 1, step: 0.01 },
         { key: 'recoil', min: 0, max: 2, step: 0.01 },
         { key: 'healSpring', min: 1, max: 60, step: 0.5 },
