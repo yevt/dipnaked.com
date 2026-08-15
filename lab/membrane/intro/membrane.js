@@ -165,10 +165,10 @@ const CONFIG = {
         attractorRamp: 1.2,       // s to ramp attractor strength from 0 → full
         strength: 32,             // full attractor spring constant (1/s^2)
         damping: 0.965,           // node damping during attract mode (kills residual sway)
-        funnelDepth: 1.15,        // depth of the funnel neck (units along -Y)
+        funnelDepth: 1.7,         // depth of the funnel neck (units along -Y) — matched to the logo art (tip ≈ half the rim width below the rim)
         funnelNeckRadius: 0.06,   // radius (units) of the funnel bottom before it goes vertical
-        funnelSharpness: 2.0,     // curve exponent: higher = flatter rim + sharper drop
-        funnelRimFlat: 0.22,      // fraction of radius that stays near-flat before the drop begins
+        funnelSharpness: 1.3,     // curve exponent — measured from the logo art profile (≈1.2–1.35)
+        funnelRimFlat: 0.05,      // fraction of radius that stays near-flat before the drop begins
         oneShot: true,            // after the ball leaves the frame, block any new drop — restart requires the user
         // -- self-calibrating continuous zoom-out (see updateZoom for the math) --
         edgePadFrac: 0.03,        // safety pad (fraction of the SHORT viewport side) around the physics envelope
@@ -189,8 +189,8 @@ const CONFIG = {
         sEase: 3,                 // 2..6 — ease exponent (2=quadratic, 3=cubic, 5=smootherstep-like)
         edgePadPx: 1,             // ball spawn: how many px BELOW the top screen edge (visible immediately)
         layoutLiftPx: 11,         // lift of .center-block to balance the logo art's internal top padding
-        logoRimWidthFrac: 0.84,   // rim ellipse width as a fraction of the logo image square
-        logoRimTopFrac: 0.18,     // rim top edge as a fraction of the logo image square height
+        logoRimWidthFrac: 0.83,   // rim ellipse width as a fraction of the logo image square (art: 1036/1254 = 0.826)
+        logoRimTopFrac: 0.166,    // rim top edge as a fraction of the logo image square height (art: 208/1254)
         crossfade: false,         // OFF for tuning: both layers stay visible so you can compare canvas vs. logo layout live
         fadeDelay: 0.0,           // s after landing (Z=1) before the crossfade starts
         fadeDuration: 1.4,        // s of the crossfade
