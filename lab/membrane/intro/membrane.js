@@ -47,9 +47,9 @@ const MATERIALS = {
         damping: 0.99992,      // internal velocity keep-factor (very near-1 → near-lossless sway)
         massScale: 1.0,        // node inertia vs impulses (recoil, heal springs)
         grip: 0.6,             // tangential drag on non-stuck contact vertices 0..1
-        adhesionStrength: 0.05, // sticky-contact detach threshold (drift, units); 0 = no sticking
+        adhesionStrength: 0.14, // sticky-contact detach threshold (drift, units); 0 = no sticking — strong cling: the film drapes the sphere instead of slipping off, so the pre-burst stretch runs deep (~2.5)
         adhesionZone: 0.8,     // fraction of the leading hemisphere where vertices may latch on
-        tearStrain: 8.9,       // strain that snaps a link — ~15% weaker than before so the film ruptures earlier and never over-stretches
+        tearStrain: 11,        // strain that snaps a link — paired with the stronger adhesion this puts the natural spoke-avalanche burst at ~2.5 depth
         tearCascade: 0.8,      // neighbour threshold multiplier after a snap (unzip)
         recoil: 0.55,          // snap-back impulse per unit strain
         healSpring: 14,        // home-spring stiffness at full heal ramp (1/s²)
