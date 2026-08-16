@@ -4,13 +4,47 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>dipnaked</title>
-    <link rel="icon" href="/logo.png" />
+    <link rel="icon" href="/logo-v2.png" />
     <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" />
     <link rel="stylesheet" href="/style.css" />
+    <script>
+        // Arm the intro only when JS actually runs — bots / no-JS visitors get
+        // the plain page. If the intro module fails to boot (old cache, network),
+        // auto-disarm after 7s so nobody is left staring at a black screen.
+        document.documentElement.classList.add('intro-armed');
+        setTimeout(function () {
+            if (!window.MEMBRANE) document.documentElement.classList.remove('intro-armed');
+        }, 7000);
+    </script>
+    <style>
+        /* No scrollbars during the intro — the layout is CSS-scaled and any
+           overflow would shift the logo position between runs. */
+        .intro-armed, .intro-armed body { overflow: hidden; }
+        /* Membrane canvas overlay: fullscreen, transparent, ABOVE everything. */
+        #membrane-canvas {
+            position: fixed;
+            inset: 0;
+            z-index: 500;           /* above layout — nothing occludes the physics */
+            pointer-events: none;   /* layout stays clickable underneath */
+        }
+        /* Zoom wrapper: JS drives translate+scale every frame so the layout
+           and the membrane pull back as one world. */
+        #layout-zoom {
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto;
+            transform-origin: 0 0;
+            will-change: transform;
+        }
+        /* Layout hidden while the intro plays; it fades in at the crossfade.
+           Only applies when armed — the no-JS page stays fully visible. */
+        .intro-armed .center-block { opacity: 0; }
+    </style>
 </head>
 <body>
+    <div id="layout-zoom">
     <div class="center-block">
-        <a href="/"><img src="/logo.png" alt="dipnaked" class="logo" /></a>
+        <a href="/"><img src="/logo-v2.png" alt="dipnaked" class="logo" id="logo-img" /></a>
         <div class="text-block">
             <div class="brand-name"><a href="/">dipnaked</a></div>
             <div class="tagline">in affair with the abyss</div>
@@ -21,5 +55,16 @@
             </div>
         </div>
     </div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "/lab/membrane/vendor/three.module.min.js",
+            "lil-gui": "/lab/membrane/vendor/lil-gui.esm.min.js"
+        }
+    }
+    </script>
+    <script type="module" src="/lab/membrane/intro/membrane.js"></script>
 </body>
 </html>

@@ -2282,7 +2282,11 @@ try {
     g.style.overflowY = 'auto';
     g.style.pointerEvents = 'auto';
     gui.close(); // collapsed by default — one click opens; never covers the tagline (esp. portrait)
-    if (new URLSearchParams(location.search).get('gui') === '0') g.style.display = 'none';
+    // GUI visibility: dev pages (body[data-intro-dev]) show it by default,
+    // production pages hide it. ?gui=1 forces it on anywhere, ?gui=0 — off.
+    const guiQ = new URLSearchParams(location.search).get('gui');
+    const devPage = document.body.hasAttribute('data-intro-dev');
+    if (guiQ === '0' || (!devPage && guiQ !== '1')) g.style.display = 'none';
 } catch (_) { /* noop */ }
 zoomInit(); // arms the zoom flight (measures geometry, computes the spawn height)
 
