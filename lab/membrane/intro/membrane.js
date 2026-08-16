@@ -110,15 +110,15 @@ const CONFIG = {
     material: { ...MATERIALS.latex }, // live-editable copy (edited sliders → "custom")
     ball: {
         radius: 0.10,
-        startHeight: 3.2,         // spawn height above the film (along +normal)
-        speed: 0.55,              // units/s along -normal (slow, comet-like) — cruise speed near the film
-        startBoost: 3.0,          // launch speed multiplier ("thrown drop"): ×speed at spawn, decays to 1× while falling
-        boostFadeEnd: 1.4,        // height above the film (units) where the boost has fully decayed to cruise speed
-        boostCurve: 1.5,          // decay shape: 1 = linear, >1 = keeps speed longer and brakes harder near the end
+        startHeight: 8,           // spawn height above the film (along +normal)
+        speed: 0.72,              // units/s along -normal (slow, comet-like) — cruise speed near the film
+        startBoost: 8.0,          // launch speed multiplier ("thrown drop"): ×speed at spawn, decays to 1× while falling
+        boostFadeEnd: 0.0,        // height above the film (units) where the boost has fully decayed to cruise speed
+        boostCurve: 2.5,          // decay shape: 1 = linear, >1 = keeps speed longer and brakes harder near the end
         exitDistance: 10.0,       // despawn this far below the film — large enough so the ball keeps falling until it's clearly off-screen
         capWrap: 0.0,             // fraction of the ball's footprint kept on the sphere surface (with slip). 0 = off — natural drape via collision + tension
         centerPin: false,         // hard-pin the film's center vertex to the ball's leading pole. OFF: the film drapes the sphere naturally — the tip mirrors the ball instead of pinching into the pole point
-        color: '#33dcf0',         // matches the sphere as drawn in the logo art
+        color: '#05b2d3',         // matches the sphere as drawn in the logo art
     },
     // rupture.maxDepth is a hard failsafe. With tougher material we need more room to stretch
     // before the failsafe fires or the depth-limit tears prematurely.
@@ -142,7 +142,7 @@ const CONFIG = {
         recoilNoise: 0.35,        // rupture impulse noise 0..1
     },
     look: {
-        baseColor: '#28d5e9',     // film color at rest / at the rim — matches the logo art
+        baseColor: '#1bd0e4',     // film color at rest / at the rim — matches the logo art
         darkenDepth: 1.9,         // deflection at which darkening saturates
         darkenPower: 0.7,         // curve exponent (higher = darkening stays near tip)
         darkenStrength: 0.78,     // 0..1 max darkening at full stretch — capped below 1 so the tip stays a deep blue, never a vanishing black hole
@@ -172,7 +172,7 @@ const CONFIG = {
         damping: 0.965,           // node damping during attract mode (kills residual sway)
         funnelDepth: 1.7,         // depth of the funnel neck (units along -Y) — matched to the logo art (tip ≈ half the rim width below the rim)
         funnelNeckRadius: 0.06,   // radius (units) of the funnel bottom before it goes vertical
-        funnelSharpness: 1.3,     // curve exponent — measured from the logo art profile (≈1.2–1.35)
+        funnelSharpness: 1.4,     // curve exponent — measured from the logo art profile (≈1.2–1.35)
         funnelRimFlat: 0.05,      // fraction of radius that stays near-flat before the drop begins
         oneShot: true,            // after the ball leaves the frame, block any new drop — restart requires the user
         // -- static start framing (computed ONCE in zoomInit, camera does not move until parking) --
@@ -190,13 +190,15 @@ const CONFIG = {
         //      from Z0 to the logo (Z=1) in sDuration seconds. The film keeps its
         //      free physics all the way; only at the very end (endAttractorLead
         //      before landing) the attractor may grab it — right before fadeout.
-        postPierceHold: 3.5,      // s after the pierce before parking starts — let the film live through a full swing cycle or two
+        startDrift: 0.015,        // pre-parking camera drift: fraction of zoom shed per second (0.01 = 1%/s). 0 = camera fully static until parking. The drift moves ALONG the parking path (zoom-out only — no mobile crop risk); parking takes over seamlessly from wherever it got to
+        startDriftRamp: 1.0,      // s to ease the drift in from standstill (no visible kick on load)
+        postPierceHold: 1.05,     // s after the pierce before parking starts — let the film live through a full swing cycle or two
         sDuration: 8.0,           // s — length of the parking S-curve (ends exactly on the logo, p=1)
         sEase: 3,                 // 2..6 — ease exponent (2=quadratic, 3=cubic, 5=smootherstep-like)
         edgePadPx: 1,             // ball spawn: how many px BELOW the top screen edge (visible immediately)
         layoutLiftPx: 11,         // lift of .center-block to balance the logo art's internal top padding
-        logoRimWidthFrac: 0.827,  // rim ellipse width as a fraction of the logo image square (art: 1037/1254, pixel-measured)
-        logoRimTopFrac: 0.1667,   // rim top edge as a fraction of the logo image square height (art: 209/1254, pixel-measured)
+        logoRimWidthFrac: 0.86,   // rim ellipse width as a fraction of the logo image square — hand-tuned compromise: slightly wider than the pixel-measured 0.827 to split the bottom-arc gap (art ellipse is rounder than the film's projection)
+        logoRimTopFrac: 0.17,     // rim top edge as a fraction of the logo image square height (pixel-measured 0.1667, hand-tuned)
         crossfade: false,         // OFF for tuning: both layers stay visible so you can compare canvas vs. logo layout live
         fadeDelay: 0.0,           // s after landing (Z=1) before the crossfade starts
         fadeDuration: 1.4,        // s of the crossfade
@@ -1408,6 +1410,7 @@ function tick(now) {
             if (zoomCtl.phase === 'slow' && zoomCtl.parkingT0 < 0
                 && phaseTime >= CONFIG.intro.postPierceHold) {
                 zoomCtl.parkingT0 = zoomCtl.tGlobal;
+                zoomCtl.lnZPark = zoomCtl.lnZ; // parking S-curve starts from the drifted zoom
             }
             // In one-shot / intro modes we never re-knit — the film keeps sloshing (or attractor holds).
             const suppressHeal = CONFIG.intro.enabled || CONFIG.intro.oneShot;
@@ -1519,7 +1522,7 @@ const PARAM_SCHEMA = [
     { id: 'ball', title: 'ball', obj: () => CONFIG.ball, params: [
         { key: 'radius', min: 0.02, max: 0.5, step: 0.01, apply: applyBallLook },
         { key: 'startHeight', min: 0.5, max: 8, step: 0.1 },
-        { key: 'startBoost', min: 1, max: 8, step: 0.1, tip: 'launch speed multiplier at spawn (1 = off)' },
+        { key: 'startBoost', min: 1, max: 16, step: 0.1, tip: 'launch speed multiplier at spawn (1 = off)' },
         { key: 'boostFadeEnd', min: 0, max: 3, step: 0.05, tip: 'height above the film where speed is back to 1x' },
         { key: 'boostCurve', min: 0.3, max: 4, step: 0.05, tip: '1 = linear decay; higher = brake later and harder' },
         { key: 'speed', min: 0.05, max: 3, step: 0.01 },
@@ -1559,6 +1562,8 @@ const PARAM_SCHEMA = [
         { key: 'restPause', min: 0, max: 5, step: 0.1 },
     ] },
     { id: 'intro', title: 'intro (attractor → logo)', obj: () => CONFIG.intro, params: [
+        { key: 'startDrift', min: 0, max: 0.05, step: 0.001, tip: 'Slow pre-parking zoom-out: fraction of zoom shed per second (0.01 = 1%/s). 0 = static start frame. Parking takes over from wherever the drift got to.' },
+        { key: 'startDriftRamp', min: 0, max: 6, step: 0.1, tip: 'Seconds to ease the drift in from standstill after load/restart.' },
         { key: 'endAttractorLead', min: 0, max: 5, step: 0.1 },
         { key: 'attractorRamp', min: 0.1, max: 5, step: 0.05 },
         { key: 'strength', min: 1, max: 200, step: 1 },
@@ -2132,7 +2137,10 @@ function zoomInit() {
     // When crossfade is off, the DOM layout (logo + text) is visible from the start
     // so you can tune the camera curve against the final target directly.
     // ?bare=1 — debug: hide the HTML logo layout entirely so only the WebGL film is visible
-    const bare = new URLSearchParams(location.search).has('bare');
+    const q = new URLSearchParams(location.search);
+    const bare = q.has('bare');
+    // ?film=0 — debug: hide the WebGL film entirely so only the DOM art layer is visible
+    canvas.style.display = q.get('film') === '0' ? 'none' : '';
     if (block) { block.style.transition = 'none'; block.style.opacity = (bare || CONFIG.intro.crossfade) ? '0' : '1'; }
     applyLayoutLift();
     if (!measureBaseGeometry()) { zoomCtl.phase = 'idle'; return; }
@@ -2159,6 +2167,7 @@ function zoomInit() {
     zoomCtl.lnZ = zoomCtl.lnZ0;
     zoomCtl.Z = zoomCtl.Z0;
     zoomCtl.parkingT0 = -1;
+    zoomCtl.lnZPark = -1;
     zoomCtl.tGlobal = 0;
     zoomCtl.spawnH = computeSpawnHeight();
     zoomCtl.phase = 'slow';
@@ -2185,11 +2194,24 @@ function updateZoom(dt) {
     // Before parking: HOLD at Z0. The flight phase has variable length (screen
     // height decides when the ball reaches the film), so nothing is clocked
     // from page load — parking is armed by the physics (pierce + postPierceHold).
-    if (zc.parkingT0 < 0) { applyZoom(); return; }
+    if (zc.parkingT0 < 0) {
+        // Optional slow drift: the "static" start frame breathes — a gentle
+        // zoom-out along the SAME flight path the parking will later follow
+        // (applyZoom derives the pan from Z), so parking takes over seamlessly.
+        if (cfg.startDrift > 0 && zc.lnZ > 0) {
+            const ramp = Math.min(1, zc.tGlobal / Math.max(0.01, cfg.startDriftRamp));
+            zc.lnZ = Math.max(0, zc.lnZ - cfg.startDrift * ramp * dt);
+            zc.Z = Math.exp(zc.lnZ);
+        }
+        applyZoom(); return;
+    }
     const sT = Math.max(0.5, cfg.sDuration);
     const x = Math.min(1, (zc.tGlobal - zc.parkingT0) / sT);
     const p = symmetricEase(x, cfg.sEase);
-    zc.lnZ = Math.max(0, zc.lnZ0 * (1 - p));
+    // Parking starts from wherever the drift left the camera (lnZPark), not
+    // from the boot-time Z0 — otherwise the takeover would jump.
+    const lnFrom = (zc.lnZPark != null && zc.lnZPark >= 0) ? zc.lnZPark : zc.lnZ0;
+    zc.lnZ = Math.max(0, lnFrom * (1 - p));
     zc.Z = Math.exp(zc.lnZ);
     // End-of-parking attractor: engage just before landing so the film settles
     // into the logo funnel right before the fadeout — not a moment earlier.
