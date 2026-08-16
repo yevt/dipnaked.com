@@ -199,9 +199,9 @@ const CONFIG = {
         layoutLiftPx: 11,         // lift of .center-block to balance the logo art's internal top padding
         logoRimWidthFrac: 0.86,   // rim ellipse width as a fraction of the logo image square — hand-tuned compromise: slightly wider than the pixel-measured 0.827 to split the bottom-arc gap (art ellipse is rounder than the film's projection)
         logoRimTopFrac: 0.17,     // rim top edge as a fraction of the logo image square height (pixel-measured 0.1667, hand-tuned)
-        crossfade: false,         // OFF for tuning: both layers stay visible so you can compare canvas vs. logo layout live
+        crossfade: true,          // after landing the canvas fades OUT while the static logo fades IN (set false for tuning: both layers visible)
         fadeDelay: 0.0,           // s after landing (Z=1) before the crossfade starts
-        fadeDuration: 1.4,        // s of the crossfade
+        fadeDuration: 3.6,        // s of the crossfade — ≈ two full oscillation cycles: the sloshing film dissolves into the static logo
     },
 };
 
@@ -1585,7 +1585,7 @@ const PARAM_SCHEMA = [
         { key: 'logoRimTopFrac', min: 0, max: 0.5, step: 0.01 },
         { key: 'crossfade', tip: 'When ON: after landing the canvas fades OUT while the static logo layout fades IN. When OFF (tuning mode): the logo layout is visible from the start so you can align the camera curve against the final target.' },
         { key: 'fadeDelay', min: 0, max: 5, step: 0.1, tip: 'Seconds to wait after landing (Z=1) before the crossfade starts. Only used when crossfade is ON.' },
-        { key: 'fadeDuration', min: 0.2, max: 5, step: 0.1, tip: 'Length of the crossfade (seconds). Only used when crossfade is ON.' },
+        { key: 'fadeDuration', min: 0.2, max: 10, step: 0.1, tip: 'Length of the crossfade (seconds). Only used when crossfade is ON.' },
     ] },
 ];
 
