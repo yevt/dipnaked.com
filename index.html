@@ -11,10 +11,25 @@
         // Arm the intro only when JS actually runs — bots / no-JS visitors get
         // the plain page. If the intro module fails to boot (old cache, network),
         // auto-disarm after 7s so nobody is left staring at a black screen.
-        document.documentElement.classList.add('intro-armed');
-        setTimeout(function () {
-            if (!window.MEMBRANE) document.documentElement.classList.remove('intro-armed');
-        }, 7000);
+        //
+        // Returning visitors: once the intro has fully played (or was skipped),
+        // membrane.js stores INTRO_VERSION in localStorage. A matching value
+        // here means "already seen" — the intro is NOT armed, the page renders
+        // plain immediately, and membrane.js boots straight into the done state
+        // (logo + links visible, "replay intro" in the corner). Bump the
+        // version to make everyone see the intro again.
+        // NOTE: keep INTRO_VERSION / the storage key in sync with
+        // /lab/membrane/intro/membrane.js.
+        (function () {
+            var INTRO_VERSION = '1';
+            var played = false;
+            try { played = localStorage.getItem('dipnaked.introPlayedVersion') === INTRO_VERSION; } catch (e) { /* private mode etc. — just play */ }
+            if (played) return;
+            document.documentElement.classList.add('intro-armed');
+            setTimeout(function () {
+                if (!window.MEMBRANE) document.documentElement.classList.remove('intro-armed');
+            }, 7000);
+        })();
     </script>
     <style>
         /* No scrollbars during the intro — the layout is CSS-scaled and any
@@ -39,8 +54,10 @@
         /* Layout hidden while the intro plays; it fades in at the crossfade.
            Only applies when armed — the no-JS page stays fully visible. */
         .intro-armed .center-block { opacity: 0; }
-        /* Replay button: bottom-right, in the site's own type. Starts invisible
-           and non-interactive; the intro fades it in together with the layout. */
+        /* Intro button: bottom-right, in the site's own type. One element, two
+           roles driven by membrane.js: "skip intro" while the intro plays,
+           "replay intro" once it's done. Starts invisible so the no-JS page
+           stays clean; membrane.js reveals it on boot. */
         #replay-btn {
             position: fixed;
             right: 24px;
@@ -77,7 +94,7 @@
     </div>
     </div>
 
-    <button id="replay-btn" title="Replay the intro">replay intro</button>
+    <button id="replay-btn" title="Replay the intro">replay intro</button><!-- label/role managed by membrane.js: skip intro ↔ replay intro -->
 
     <script type="importmap">
     {

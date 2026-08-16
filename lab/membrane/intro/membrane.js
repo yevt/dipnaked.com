@@ -201,7 +201,7 @@ const CONFIG = {
         logoRimTopFrac: 0.17,     // rim top edge as a fraction of the logo image square height (pixel-measured 0.1667, hand-tuned)
         crossfade: true,          // after landing the canvas fades OUT while the static logo fades IN (set false for tuning: both layers visible)
         fadeDelay: 0.0,           // s after landing (Z=1) before the crossfade starts
-        fadeDuration: 3.6,        // s of the crossfade — ≈ two full oscillation cycles: the sloshing film dissolves into the static logo
+        fadeDuration: 4.32,       // s of the crossfade (3.6 + 20%) — a bit over two full oscillation cycles: the sloshing film dissolves into the static logo
     },
 };
 
@@ -1886,6 +1886,7 @@ const zoomCtl = {
     parkingT0: -1,             // tGlobal at which parking (the S-curve flight) started; -1 = still holding at Z0
     tGlobal: 0,                // seconds since zoomInit
     fadeTimer: 0,
+    fadeDoneTimer: 0,          // fires at the END of the crossfade — flips the intro button to "replay"
 };
 
 // Project the pinned outer ring of the membrane to canvas CSS pixels.
@@ -2130,16 +2131,64 @@ function meanFreeY() {
     return n ? s / n : 0;
 }
 
-// Production replay button (#replay-btn on the main page): fades in with the
-// layout at the end of the intro, hides again while a replay is running.
+// ----------------------------------------------------------------------------
+// Intro persistence + button state — one transparent state machine.
+//
+//   'playing'  intro flight is running → button reads "skip intro"
+//   'done'     intro finished / skipped / already seen → button reads "replay intro"
+//
+// Transitions:
+//   boot (first visit) / replay click ............... → 'playing'
+//   crossfade end / skip click / boot (already seen) . → 'done'
+//
+// "Already seen" is a version-keyed localStorage flag written the moment the
+// intro lands (or is skipped). Bump INTRO_VERSION to re-show the intro to
+// everyone. NOTE: keep INTRO_VERSION / the key in sync with the head script
+// in /index.html (it decides whether to arm the intro before this module loads).
+// ----------------------------------------------------------------------------
+const INTRO_VERSION = '1';
+const INTRO_LS_KEY = 'dipnaked.introPlayedVersion';
+
+function introAlreadyPlayed() {
+    try { return localStorage.getItem(INTRO_LS_KEY) === INTRO_VERSION; } catch (_) { return false; }
+}
+
+function markIntroPlayed() {
+    try { localStorage.setItem(INTRO_LS_KEY, INTRO_VERSION); } catch (_) { /* private mode — intro will just replay next visit */ }
+}
+
+// Production intro button (#replay-btn on the main page): visible for the whole
+// session; its label/role follows the state machine above.
 // The lab page's dev restart button (body[data-intro-dev]) is never touched.
+let introUiState = 'playing';
+
 function replayBtnEl() {
     return document.body.hasAttribute('data-intro-dev') ? null : document.getElementById('replay-btn');
 }
 
+function setIntroUiState(state) {
+    introUiState = state;
+    const btn = replayBtnEl();
+    if (!btn) return;
+    if (state === 'playing') {
+        btn.textContent = 'skip intro';
+        btn.title = 'Skip the intro';
+    } else {
+        btn.textContent = 'replay intro';
+        btn.title = 'Replay the intro';
+    }
+    btn.style.transition = 'none';
+    btn.style.opacity = '1';
+    btn.style.pointerEvents = 'auto';
+}
+
 function scheduleCrossfade() {
-    if (!CONFIG.intro.crossfade) return;
     clearTimeout(zoomCtl.fadeTimer);
+    clearTimeout(zoomCtl.fadeDoneTimer);
+    // Landing IS the end of the intro flight — remember it now, regardless of
+    // whether the cosmetic crossfade runs (it's off in tuning mode).
+    markIntroPlayed();
+    if (!CONFIG.intro.crossfade) { setIntroUiState('done'); return; }
     const canvas = renderer.domElement;
     const block = document.querySelector('.center-block');
     zoomCtl.fadeTimer = setTimeout(() => {
@@ -2153,18 +2202,57 @@ function scheduleCrossfade() {
             block.style.transition = `opacity ${dur}s linear`;
             block.style.opacity = '1';
         }
-        const replay = replayBtnEl();
-        if (replay) {
-            replay.style.transition = `opacity ${dur}s linear`;
-            replay.style.opacity = '1';
-            replay.style.pointerEvents = 'auto';
-        }
+        // The button flips to "replay intro" only when the fade completes —
+        // until then a click still counts as "skip" (fast-forwards the fade).
+        zoomCtl.fadeDoneTimer = setTimeout(() => setIntroUiState('done'), dur * 1000);
     }, CONFIG.intro.fadeDelay * 1000);
+}
+
+// Skip: land the camera instantly, snap the film into the logo funnel and run
+// a short crossfade — the exact same end state as a fully played intro.
+function skipIntro() {
+    clearTimeout(zoomCtl.fadeTimer);
+    clearTimeout(zoomCtl.fadeDoneTimer);
+    zoomCtl.lnZ = 0; zoomCtl.Z = 1;
+    zoomCtl.phase = 'landed';
+    applyZoom();
+    snapToFunnel();
+    markIntroPlayed();
+    const dur = 0.6; // quick dissolve — a skip should feel immediate, not abrupt
+    const canvas = renderer.domElement;
+    canvas.style.transition = `opacity ${dur}s linear`;
+    canvas.style.opacity = '0';
+    const block = document.querySelector('.center-block');
+    if (block) {
+        block.style.transition = `opacity ${dur}s linear`;
+        block.style.opacity = '1';
+    }
+    setIntroUiState('done');
+}
+
+// Boot path for returning visitors: no flight at all — canvas hidden, layout
+// visible, button reads "replay intro". Replay (restartAll → zoomInit) restores
+// everything the flight needs.
+function bootIntroDone() {
+    clearTimeout(zoomCtl.fadeTimer);
+    clearTimeout(zoomCtl.fadeDoneTimer);
+    const canvas = renderer.domElement;
+    canvas.style.transition = 'none';
+    canvas.style.opacity = '0';
+    canvas.style.display = 'none'; // zoomInit resets display on replay
+    const block = document.querySelector('.center-block');
+    if (block) { block.style.transition = 'none'; block.style.opacity = '1'; }
+    applyLayoutLift();
+    zoomCtl.lnZ = 0; zoomCtl.Z = 1;
+    zoomCtl.phase = 'landed';
+    if (measureBaseGeometry()) applyZoom();
+    setIntroUiState('done');
 }
 
 // (Re)initialize the whole zoom flight. Called on boot and on manual restart.
 function zoomInit() {
     clearTimeout(zoomCtl.fadeTimer);
+    clearTimeout(zoomCtl.fadeDoneTimer);
     const canvas = renderer.domElement;
     canvas.style.transition = 'none';
     canvas.style.opacity = '1';
@@ -2177,8 +2265,7 @@ function zoomInit() {
     // ?film=0 — debug: hide the WebGL film entirely so only the DOM art layer is visible
     canvas.style.display = q.get('film') === '0' ? 'none' : '';
     if (block) { block.style.transition = 'none'; block.style.opacity = (bare || CONFIG.intro.crossfade) ? '0' : '1'; }
-    const replay = replayBtnEl();
-    if (replay) { replay.style.transition = 'none'; replay.style.opacity = '0'; replay.style.pointerEvents = 'none'; }
+    setIntroUiState('playing'); // the flight is (re)starting → button offers "skip intro"
     applyLayoutLift();
     if (!measureBaseGeometry()) { zoomCtl.phase = 'idle'; return; }
     // Measure geometry needed for the auto-fit envelope, in world (unzoomed) px.
@@ -2323,7 +2410,15 @@ try {
     const devPage = document.body.hasAttribute('data-intro-dev');
     if (guiQ === '0' || (!devPage && guiQ !== '1')) g.style.display = 'none';
 } catch (_) { /* noop */ }
-zoomInit(); // arms the zoom flight (measures geometry, computes the spawn height)
+// Returning visitor on the production page: the intro has already played for
+// this INTRO_VERSION → boot straight into the done state (the head script in
+// index.html also skipped arming the intro, so the layout was never hidden).
+// Dev pages always play — tuning must not depend on a browser flag.
+if (introAlreadyPlayed() && !document.body.hasAttribute('data-intro-dev')) {
+    bootIntroDone();
+} else {
+    zoomInit(); // arms the zoom flight (measures geometry, computes the spawn height)
+}
 
 // Boot warm-up gate: on a COLD load the first frames are expensive one-offs
 // (three.js shader compile, 1254px logo decode, GUI build, webfonts). The drop
@@ -2381,6 +2476,10 @@ window.MEMBRANE = { CONFIG, MATERIALS, gui, restart: restartAll,
     get phaseTime() { return phaseTime; },
     get introState() { return introState; } };
 
-// Standalone external restart button (index.html) — fires a fresh drop.
+// Intro button on the production page (#replay-btn): skip while playing,
+// replay when done. The lab pages' dev restart button always restarts.
 const restartBtn = document.getElementById('restart-btn') || document.getElementById('replay-btn');
-if (restartBtn) restartBtn.addEventListener('click', () => restartAll());
+if (restartBtn) restartBtn.addEventListener('click', () => {
+    if (restartBtn.id === 'replay-btn' && introUiState === 'playing') skipIntro();
+    else restartAll();
+});
