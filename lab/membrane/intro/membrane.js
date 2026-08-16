@@ -462,8 +462,8 @@ function buildMembrane() {
     // core. `darkenDepth/Power/Strength` are re-used as alpha-drop controls.
     const material = new THREE.ShaderMaterial({
         side: THREE.DoubleSide,
-        transparent: true,
-        depthWrite: false,  // let the ball render through without z-fighting
+        transparent: false, // fully OPAQUE: the bright ball must not show through the film,
+        depthWrite: true,   // and depth hides the far side of the ring — unambiguous geometry
         uniforms: {
             uColor: { value: new THREE.Color(CONFIG.look.baseColor) },
             uBrightness: { value: CONFIG.look.brightness },
@@ -554,6 +554,11 @@ const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 24), ballMat);
 ballMesh.renderOrder = 0;
 tiltGroup.add(ballMesh);
 ballMesh.visible = false;
+// Once the ball has FULLY left the viewport (after having actually been seen
+// on screen), it never comes back — regardless of the scenario phase.
+let ballSeen = false;
+let ballGone = false;
+const _ballProj = new THREE.Vector3();
 const ballPos = new THREE.Vector3(); // local (tiltGroup) space
 // Debug handles: window.__mem.ballMesh / ballMat / ballPos / camera / CONFIG / THREE
 window.__mem = { get ballMesh(){return ballMesh;}, get ballMat(){return ballMat;},
@@ -694,6 +699,8 @@ function restartCycle() {
     ballMesh.visible = false;
     ballEngaged = false;
     ballStuck = false;
+    ballSeen = false;
+    ballGone = false;
     dropUsed = false;
     setPhase(Phase.REST);
 }
@@ -1475,6 +1482,16 @@ function tick(now) {
     updateColors();
     updateContactDebug();
     updateZoom(dt);
+    // Once the ball has FULLY left the viewport (after having been seen on
+    // screen), it disappears for good — no matter which phase of the scenario
+    // it happens in. Reset only by a restart.
+    if (!ballGone && ballMesh.visible) {
+        ballMesh.getWorldPosition(_ballProj).project(camera);
+        const off = Math.abs(_ballProj.x) > 1.3 || Math.abs(_ballProj.y) > 1.3 || _ballProj.z > 1;
+        if (!off) ballSeen = true;
+        else if (ballSeen) ballGone = true;
+    }
+    if (ballGone) ballMesh.visible = false;
     renderer.render(scene, camera);
 }
 
@@ -2120,11 +2137,20 @@ function scheduleCrossfade() {
     const block = document.querySelector('.center-block');
     zoomCtl.fadeTimer = setTimeout(() => {
         const dur = CONFIG.intro.fadeDuration;
-        canvas.style.transition = `opacity ${dur}s ease-out`;
+        // Both ramps are LINEAR so the opacities always sum to 1: the film and
+        // the logo art practically coincide, and a linear cross-dissolve keeps
+        // the combined brightness constant — no dip in the middle of the fade.
+        canvas.style.transition = `opacity ${dur}s linear`;
         canvas.style.opacity = '0';
         if (block) {
-            block.style.transition = `opacity ${dur}s ease-in`;
+            block.style.transition = `opacity ${dur}s linear`;
             block.style.opacity = '1';
+        }
+        const replay = replayBtnEl();
+        if (replay) {
+            replay.style.transition = `opacity ${dur}s linear`;
+            replay.style.opacity = '1';
+            replay.style.pointerEvents = 'auto';
         }
     }, CONFIG.intro.fadeDelay * 1000);
 }
@@ -2347,5 +2373,5 @@ window.MEMBRANE = { CONFIG, MATERIALS, gui, restart: restartAll,
     get introState() { return introState; } };
 
 // Standalone external restart button (index.html) — fires a fresh drop.
-const restartBtn = document.getElementById('restart-btn');
+const restartBtn = document.getElementById('restart-btn') || document.getElementById('replay-btn');
 if (restartBtn) restartBtn.addEventListener('click', () => restartAll());

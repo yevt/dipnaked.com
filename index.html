@@ -39,6 +39,26 @@
         /* Layout hidden while the intro plays; it fades in at the crossfade.
            Only applies when armed — the no-JS page stays fully visible. */
         .intro-armed .center-block { opacity: 0; }
+        /* Replay button: bottom-right, in the site's own type. Starts invisible
+           and non-interactive; the intro fades it in together with the layout. */
+        #replay-btn {
+            position: fixed;
+            right: 24px;
+            bottom: 20px;
+            z-index: 600;
+            background: none;
+            border: none;
+            padding: 8px 4px;
+            font: inherit;
+            font-size: 0.8em;
+            letter-spacing: 0.12em;
+            color: var(--color-tagline, #777);
+            cursor: pointer;
+            opacity: 0;
+            pointer-events: none;
+            transition: color 0.2s ease;
+        }
+        #replay-btn:hover { color: var(--color-text, #ddd); }
     </style>
 </head>
 <body>
@@ -56,6 +76,8 @@
         </div>
     </div>
     </div>
+
+    <button id="replay-btn" title="Replay the intro">replay intro</button>
 
     <script type="importmap">
     {
