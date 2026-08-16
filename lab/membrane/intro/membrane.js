@@ -2130,6 +2130,13 @@ function meanFreeY() {
     return n ? s / n : 0;
 }
 
+// Production replay button (#replay-btn on the main page): fades in with the
+// layout at the end of the intro, hides again while a replay is running.
+// The lab page's dev restart button (body[data-intro-dev]) is never touched.
+function replayBtnEl() {
+    return document.body.hasAttribute('data-intro-dev') ? null : document.getElementById('replay-btn');
+}
+
 function scheduleCrossfade() {
     if (!CONFIG.intro.crossfade) return;
     clearTimeout(zoomCtl.fadeTimer);
@@ -2170,6 +2177,8 @@ function zoomInit() {
     // ?film=0 — debug: hide the WebGL film entirely so only the DOM art layer is visible
     canvas.style.display = q.get('film') === '0' ? 'none' : '';
     if (block) { block.style.transition = 'none'; block.style.opacity = (bare || CONFIG.intro.crossfade) ? '0' : '1'; }
+    const replay = replayBtnEl();
+    if (replay) { replay.style.transition = 'none'; replay.style.opacity = '0'; replay.style.pointerEvents = 'none'; }
     applyLayoutLift();
     if (!measureBaseGeometry()) { zoomCtl.phase = 'idle'; return; }
     // Measure geometry needed for the auto-fit envelope, in world (unzoomed) px.
