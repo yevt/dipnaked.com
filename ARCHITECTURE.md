@@ -72,3 +72,19 @@ feel as long as possible.
   film; Verlet mass–spring simulation with strain-stiffening materials —
   presets in `MATERIALS`, constants in `CONFIG`, seeded imperfection, GUI on
   `H`). Not linked from the main site.
+
+## Intro (main page)
+`lab/membrane/intro/membrane.js` plays the membrane intro over the landing
+page. One transparent state machine drives the bottom-right button
+(`#replay-btn`):
+- `playing` — the flight is running; the button reads **skip intro** (skip
+  lands the camera, snaps the film into the logo funnel and runs a quick
+  dissolve).
+- `done` — finished / skipped / already seen; the button reads **replay intro**.
+
+Persistence: when the intro lands (or is skipped) `INTRO_VERSION` is written
+to `localStorage` under `dipnaked.introPlayedVersion`. On later visits the
+head script in `index.html` sees the matching version and does not arm the
+intro — the page renders plain immediately and membrane.js boots straight
+into `done`. Bump `INTRO_VERSION` (in **both** `membrane.js` and the
+`index.html` head script) to re-show the intro to everyone.
