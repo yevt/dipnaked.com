@@ -33,8 +33,11 @@
     </script>
     <style>
         /* No scrollbars during the intro — the layout is CSS-scaled and any
-           overflow would shift the logo position between runs. */
-        .intro-armed, .intro-armed body { overflow: hidden; }
+           overflow would shift the logo position between runs. .intro-armed
+           covers the pre-boot window (head script); .intro-playing is toggled
+           by membrane.js for the whole flight, including replays. */
+        .intro-armed, .intro-armed body,
+        .intro-playing, .intro-playing body { overflow: hidden; }
         /* Membrane canvas overlay: fullscreen, transparent, ABOVE everything. */
         #membrane-canvas {
             position: fixed;
