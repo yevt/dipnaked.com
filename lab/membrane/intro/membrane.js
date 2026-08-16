@@ -2168,6 +2168,10 @@ function replayBtnEl() {
 
 function setIntroUiState(state) {
     introUiState = state;
+    // No scrollbars while the flight is running: the CSS-scaled layout
+    // overflows the viewport during the zoom. The head script's .intro-armed
+    // guard only covers the first (armed) play — this class covers replays too.
+    document.documentElement.classList.toggle('intro-playing', state === 'playing');
     const btn = replayBtnEl();
     if (!btn) return;
     if (state === 'playing') {
