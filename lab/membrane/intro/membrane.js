@@ -191,7 +191,7 @@ const CONFIG = {
         //      free physics all the way; only at the very end (endAttractorLead
         //      before landing) the attractor may grab it — right before fadeout.
         startDrift: 0.015,        // pre-parking camera drift: fraction of zoom shed per second (0.01 = 1%/s). 0 = camera fully static until parking. The drift moves ALONG the parking path (zoom-out only — no mobile crop risk); parking takes over seamlessly from wherever it got to
-        startDriftRamp: 1.0,      // s to ease the drift in from standstill (no visible kick on load)
+        startDriftRamp: 0.0,      // s to ease the drift in from standstill. 0 = constant-speed pan from the very first frame
         postPierceHold: 1.05,     // s after the pierce before parking starts — let the film live through a full swing cycle or two
         sDuration: 8.0,           // s — length of the parking S-curve (ends exactly on the logo, p=1)
         sEase: 3,                 // 2..6 — ease exponent (2=quadratic, 3=cubic, 5=smootherstep-like)
@@ -2207,10 +2207,15 @@ function updateZoom(dt) {
     }
     const sT = Math.max(0.5, cfg.sDuration);
     const x = Math.min(1, (zc.tGlobal - zc.parkingT0) / sT);
-    const p = symmetricEase(x, cfg.sEase);
     // Parking starts from wherever the drift left the camera (lnZPark), not
     // from the boot-time Z0 — otherwise the takeover would jump.
     const lnFrom = (zc.lnZPark != null && zc.lnZPark >= 0) ? zc.lnZPark : zc.lnZ0;
+    // Velocity-continuous takeover: the S-curve is given the drift's speed as
+    // its initial slope (s0, normalized), so the camera NEVER stalls — constant
+    // pan → seamless accel into parking → decel only at the logo itself.
+    const s0 = (cfg.startDrift > 0 && lnFrom > 1e-6)
+        ? Math.min(2, cfg.startDrift * sT / lnFrom) : 0;
+    const p = Math.min(1, symmetricEase(x, cfg.sEase) + s0 * x * (1 - x) * (1 - x));
     zc.lnZ = Math.max(0, lnFrom * (1 - p));
     zc.Z = Math.exp(zc.lnZ);
     // End-of-parking attractor: engage just before landing so the film settles
