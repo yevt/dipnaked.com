@@ -1,0 +1,50 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Cache busting: stamp every local .js/.css reference in every .html with
+      # the commit SHA (?v=<sha8>). A new deploy = new asset URLs, so browsers
+      # can never pair a fresh HTML with a stale script (or vice versa).
+      # External URLs (containing ':') are left untouched.
+      - name: Stamp asset URLs with commit SHA
+        run: |
+          V=${GITHUB_SHA::8}
+          find . -name '*.html' -not -path './.git/*' -print0 | while IFS= read -r -d '' f; do
+            sed -i -E \
+              -e "s/\.(js|css)\?v=[A-Za-z0-9]+/.\1?v=$V/g" \
+              -e "s/(src=\"[^\":]+\.js)\"/\1?v=$V\"/g" \
+              -e "s/(href=\"[^\":]+\.css)\"/\1?v=$V\"/g" \
+              -e "s/(\"[^\":]+\.module\.min\.js)\"/\1?v=$V\"/g" \
+              "$f"
+          done
+          echo "stamped with v=$V"
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1350,7 +1350,9 @@ function holdOverlay(text) {
 
 function tick(now) {
     requestAnimationFrame(tick);
-    const rawDt = Math.min(0.1, (now - lastTime) / 1000);
+    // dt cap 33ms: a load-time hitch (shader compile, image decode, GC) reads
+    // as a barely-visible slow-mo instead of teleporting the ball 2-6 frames.
+    const rawDt = Math.min(0.033, (now - lastTime) / 1000);
     lastTime = now;
     const dt = rawDt * CONFIG.timing.timeScale;
     if (HOLD_DEPTH > 0 && phase === Phase.APPROACH) {
@@ -1423,7 +1425,7 @@ function tick(now) {
     // One-shot: once the ball has fired this session, REST never spawns a new drop.
     // The user must hit the external restart button to arm the next cycle.
     if (phase === Phase.REST && phaseTime >= CONFIG.timing.restPause
-        && !(CONFIG.intro.oneShot && dropUsed)) {
+        && bootReady && !(CONFIG.intro.oneShot && dropUsed)) {
         const ang = cycleRng() * Math.PI * 2;
         const off = CONFIG.imperfection.entryOffset * (0.25 + 0.75 * cycleRng());
         const startH = zoomCtl.spawnH > 0 ? zoomCtl.spawnH : CONFIG.ball.startHeight;
@@ -2283,6 +2285,24 @@ try {
     if (new URLSearchParams(location.search).get('gui') === '0') g.style.display = 'none';
 } catch (_) { /* noop */ }
 zoomInit(); // arms the zoom flight (measures geometry, computes the spawn height)
+
+// Boot warm-up gate: on a COLD load the first frames are expensive one-offs
+// (three.js shader compile, 1254px logo decode, GUI build, webfonts). The drop
+// is released only after those are done + two warm frames, hard-capped at 1s.
+// Meanwhile the film idles on screen — a calm beat, not a black screen or a
+// loader. Manual restart is unaffected (everything is warm by then).
+let bootReady = false;
+(async () => {
+    try {
+        const tasks = [];
+        if (document.fonts && document.fonts.ready) tasks.push(document.fonts.ready);
+        const logoImg = document.getElementById('logo-img');
+        if (logoImg && logoImg.decode) tasks.push(logoImg.decode().catch(() => {}));
+        try { renderer.compile(scene, camera); } catch (_) { /* noop */ }
+        await Promise.race([Promise.all(tasks), new Promise(r => setTimeout(r, 1000))]);
+    } catch (_) { /* noop */ }
+    requestAnimationFrame(() => requestAnimationFrame(() => { bootReady = true; }));
+})();
 requestAnimationFrame(tick);
 
 // Dev helper: ?frozen=1 in URL → force the mesh straight into the funnel target
