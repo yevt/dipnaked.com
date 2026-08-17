@@ -2198,7 +2198,7 @@ function markIntroPlayed() {
 
 // Production intro button (#replay-btn on the main page): visible for the whole
 // session; its label/role follows the state machine above.
-// The lab page's dev restart button (body[data-intro-dev]) is never touched.
+// Dedicated dev pages (body[data-intro-dev]) keep their own restart button.
 let introUiState = 'playing';
 
 function replayBtnEl() {
@@ -2452,11 +2452,12 @@ try {
     g.style.overflowY = 'auto';
     g.style.pointerEvents = 'auto';
     gui.close(); // collapsed by default — one click opens; never covers the tagline (esp. portrait)
-    // GUI visibility: dev pages (body[data-intro-dev]) show it by default,
-    // production pages hide it. ?gui=1 forces it on anywhere, ?gui=0 — off.
+    // GUI visibility: dedicated dev pages (body[data-intro-dev]) and synced
+    // lab previews (body[data-intro-gui]) show it by default; production pages
+    // hide it. ?gui=1 forces it on anywhere, ?gui=0 — off.
     const guiQ = new URLSearchParams(location.search).get('gui');
-    const devPage = document.body.hasAttribute('data-intro-dev');
-    if (guiQ === '0' || (!devPage && guiQ !== '1')) g.style.display = 'none';
+    const guiDefaultOn = document.body.hasAttribute('data-intro-dev') || document.body.hasAttribute('data-intro-gui');
+    if (guiQ === '0' || (!guiDefaultOn && guiQ !== '1')) g.style.display = 'none';
 } catch (_) { /* noop */ }
 // Returning visitor on the production page: the intro has already played for
 // this INTRO_VERSION → boot straight into the done state (the head script in
