@@ -112,7 +112,7 @@ const CONFIG = {
         radius: 0.10,
         startHeight: 8,           // spawn height above the film (along +normal)
         speed: 0.72,              // units/s along -normal (slow, comet-like) — cruise speed near the film
-        startBoost: 8.0,          // launch speed multiplier ("thrown drop"): ×speed at spawn, decays to 1× while falling
+        startBoost: 6.8,          // launch speed multiplier ("thrown drop", 8.0 − 15%): ×speed at spawn, decays to 1× while falling
         boostFadeEnd: 0.0,        // height above the film (units) where the boost has fully decayed to cruise speed
         boostCurve: 2.5,          // decay shape: 1 = linear, >1 = keeps speed longer and brakes harder near the end
         exitDistance: 10.0,       // despawn this far below the film — large enough so the ball keeps falling until it's clearly off-screen
@@ -165,8 +165,8 @@ const CONFIG = {
     // ------------------------------------------------------------------------
     intro: {
         enabled: true,            // master switch for the attractor machinery (physics hook + manual snap)
-        endAttractor: false,      // engage the attractor at the very end of parking. OFF: the film keeps free physics to the last frame
-        endAttractorLead: 1.6,    // s before landing when the attractor starts ramping in (covers attractorRamp)
+        endAttractor: true,       // engage the final attractor during the crossfade: once the fade has started, the film is grabbed on a DOWNWARD pass past the mid-point of its swing (see updateEndAttractor)
+        endAttractorLead: 1.6,    // (legacy, unused by the swing-phase trigger) s before landing when the attractor starts ramping in
         attractorRamp: 1.2,       // s to ramp attractor strength from 0 → full
         strength: 32,             // full attractor spring constant (1/s^2)
         damping: 0.965,           // node damping during attract mode (kills residual sway)
@@ -188,8 +188,8 @@ const CONFIG = {
         //   3. PARKING (fixed): starts on the way DOWN from that full upswing, at
         //      pierce + postPierceHold. One symmetric S-curve takes the camera
         //      from Z0 to the logo (Z=1) in sDuration seconds. The film keeps its
-        //      free physics all the way; only at the very end (endAttractorLead
-        //      before landing) the attractor may grab it — right before fadeout.
+        //      free physics all the way; only after the crossfade starts may
+        //      the attractor grab it — on a downward pass past mid-swing.
         startDrift: 0.015,        // pre-parking camera drift: fraction of zoom shed per second (0.01 = 1%/s). 0 = camera fully static until parking. The drift moves ALONG the parking path (zoom-out only — no mobile crop risk); parking takes over seamlessly from wherever it got to
         startDriftRamp: 0.0,      // s to ease the drift in from standstill. 0 = constant-speed pan from the very first frame
         postPierceHold: 1.05,     // s after the pierce before parking starts — let the film live through a full swing cycle or two
@@ -201,7 +201,7 @@ const CONFIG = {
         logoRimTopFrac: 0.17,     // rim top edge as a fraction of the logo image square height (pixel-measured 0.1667, hand-tuned)
         crossfade: true,          // after landing the canvas fades OUT while the static logo fades IN (set false for tuning: both layers visible)
         fadeDelay: 0.0,           // s after landing (Z=1) before the crossfade starts
-        fadeDuration: 4.32,       // s of the crossfade (3.6 + 20%) — a bit over two full oscillation cycles: the sloshing film dissolves into the static logo
+        fadeDuration: 3.45,       // s of the crossfade (4.32 − 20%) — about two full oscillation cycles: the sloshing film dissolves into the static logo
     },
 };
 
@@ -213,6 +213,44 @@ const introState = {
     startTime: 0,         // performance.now()/1000 when engaged
     triggeredAt: -1,      // phaseTime of PIERCED at which we scheduled activation
 };
+
+// End-attractor swing-phase trigger — armed the moment the crossfade actually
+// starts. Each frame it watches the film's mean height (meanFreeY) and fires
+// engageIntro() on a DOWNWARD pass once the film has dropped below the
+// mid-point of its tracked swing, so the attractor pull works WITH the motion.
+const fadeAttr = {
+    armed: false,         // crossfade started, waiting for the right swing phase
+    endAt: 0,             // perf-clock seconds when the crossfade ends (failsafe)
+    lastY: NaN,           // meanFreeY of the previous frame (direction detection)
+    minY: Infinity,       // running swing trough since the fade started
+    maxY: -Infinity,      // running swing peak since the fade started
+};
+
+function disarmFadeAttr() {
+    fadeAttr.armed = false;
+    fadeAttr.lastY = NaN;
+    fadeAttr.minY = Infinity;
+    fadeAttr.maxY = -Infinity;
+}
+
+function updateEndAttractor() {
+    if (!fadeAttr.armed) return;
+    const cfg = CONFIG.intro;
+    if (!cfg.enabled || !cfg.endAttractor || introState.active) { disarmFadeAttr(); return; }
+    const y = meanFreeY();
+    const prev = fadeAttr.lastY;
+    fadeAttr.lastY = y;
+    if (y < fadeAttr.minY) fadeAttr.minY = y;
+    if (y > fadeAttr.maxY) fadeAttr.maxY = y;
+    const mid = (fadeAttr.minY + fadeAttr.maxY) / 2;
+    const goingDown = Number.isFinite(prev) && y < prev;
+    // Failsafe: if the film has all but settled and the swing condition never
+    // fires, engage at the end of the crossfade so the funnel is guaranteed.
+    if ((goingDown && y < mid) || (performance.now() / 1000) >= fadeAttr.endAt) {
+        disarmFadeAttr();
+        engageIntro();
+    }
+}
 
 // Target funnel profile: depth as a function of normalized radius t = r/R.
 // t = 0 at the center, t = 1 at the rim.
@@ -1482,6 +1520,7 @@ function tick(now) {
     updateColors();
     updateContactDebug();
     updateZoom(dt);
+    updateEndAttractor();
     // Once the ball has FULLY left the viewport (after having been seen on
     // screen), it disappears for good — no matter which phase of the scenario
     // it happens in. Reset only by a restart.
@@ -2209,6 +2248,12 @@ function scheduleCrossfade() {
         // The button flips to "replay intro" only when the fade completes —
         // until then a click still counts as "skip" (fast-forwards the fade).
         zoomCtl.fadeDoneTimer = setTimeout(() => setIntroUiState('done'), dur * 1000);
+        // Arm the end-attractor swing-phase trigger: from now on the frame
+        // loop watches the film and engages the attractor on a downward pass
+        // past mid-swing (or at the latest when the fade ends).
+        disarmFadeAttr();
+        fadeAttr.armed = true;
+        fadeAttr.endAt = performance.now() / 1000 + dur;
     }, CONFIG.intro.fadeDelay * 1000);
 }
 
@@ -2217,6 +2262,7 @@ function scheduleCrossfade() {
 function skipIntro() {
     clearTimeout(zoomCtl.fadeTimer);
     clearTimeout(zoomCtl.fadeDoneTimer);
+    disarmFadeAttr();
     zoomCtl.lnZ = 0; zoomCtl.Z = 1;
     zoomCtl.phase = 'landed';
     applyZoom();
@@ -2257,6 +2303,7 @@ function bootIntroDone() {
 function zoomInit() {
     clearTimeout(zoomCtl.fadeTimer);
     clearTimeout(zoomCtl.fadeDoneTimer);
+    disarmFadeAttr();
     const canvas = renderer.domElement;
     canvas.style.transition = 'none';
     canvas.style.opacity = '1';
@@ -2346,12 +2393,9 @@ function updateZoom(dt) {
     const p = Math.min(1, symmetricEase(x, cfg.sEase) + s0 * x * (1 - x) * (1 - x));
     zc.lnZ = Math.max(0, lnFrom * (1 - p));
     zc.Z = Math.exp(zc.lnZ);
-    // End-of-parking attractor: engage just before landing so the film settles
-    // into the logo funnel right before the fadeout — not a moment earlier.
-    if (cfg.enabled && cfg.endAttractor && !introState.active
-        && (sT - (zc.tGlobal - zc.parkingT0)) <= Math.max(0, cfg.endAttractorLead)) {
-        engageIntro();
-    }
+    // End-of-parking attractor: no longer triggered here by time-to-landing —
+    // the swing-phase trigger in updateEndAttractor() engages it during the
+    // crossfade, on a downward pass of the film past its mid-swing point.
     if (x >= 1 && zc.phase !== 'landed') {
         zc.lnZ = 0; zc.Z = 1;
         zc.phase = 'landed';
