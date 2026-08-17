@@ -165,7 +165,9 @@ const CONFIG = {
     // ------------------------------------------------------------------------
     intro: {
         enabled: true,            // master switch for the attractor machinery (physics hook + manual snap)
-        endAttractor: true,       // engage the final attractor during the crossfade: once the fade has started, the film is grabbed on a DOWNWARD pass past the mid-point of its swing (see updateEndAttractor)
+        endAttractor: true,       // engage the final grab during the crossfade: once the fade has started, the film is caught exactly at a swing TROUGH — the bottom turning point of its oscillation (see updateEndAttractor)
+        freezeTrough: 1,          // which bottom point (trough) after the crossfade start triggers the grab: 1 = first trough, 2 = second trough
+        freezeAtBottom: true,     // hard freeze at the trough: zero all film velocities the moment it is grabbed, so it settles into the funnel with NO rebound (OFF = legacy soft grab, attractor fights the residual momentum)
         endAttractorLead: 1.6,    // (legacy, unused by the swing-phase trigger) s before landing when the attractor starts ramping in
         attractorRamp: 1.2,       // s to ramp attractor strength from 0 → full
         strength: 32,             // full attractor spring constant (1/s^2)
@@ -189,7 +191,7 @@ const CONFIG = {
         //      pierce + postPierceHold. One symmetric S-curve takes the camera
         //      from Z0 to the logo (Z=1) in sDuration seconds. The film keeps its
         //      free physics all the way; only after the crossfade starts may
-        //      the attractor grab it — on a downward pass past mid-swing.
+        //      the attractor grab it — at a swing trough (bottom turning point).
         startDrift: 0.015,        // pre-parking camera drift: fraction of zoom shed per second (0.01 = 1%/s). 0 = camera fully static until parking. The drift moves ALONG the parking path (zoom-out only — no mobile crop risk); parking takes over seamlessly from wherever it got to
         startDriftRamp: 0.0,      // s to ease the drift in from standstill. 0 = constant-speed pan from the very first frame
         postPierceHold: 1.05,     // s after the pierce before parking starts — let the film live through a full swing cycle or two
@@ -214,23 +216,26 @@ const introState = {
     triggeredAt: -1,      // phaseTime of PIERCED at which we scheduled activation
 };
 
-// End-attractor swing-phase trigger — armed the moment the crossfade actually
+// End-attractor trough trigger — armed the moment the crossfade actually
 // starts. Each frame it watches the film's mean height (meanFreeY) and fires
-// engageIntro() on a DOWNWARD pass once the film has dropped below the
-// mid-point of its tracked swing, so the attractor pull works WITH the motion.
+// engageIntro() at the Nth swing TROUGH (bottom turning point: the film was
+// moving down and starts moving up). N = CONFIG.intro.freezeTrough (1 or 2).
+// Grabbing exactly at the bottom (optionally with a hard velocity freeze —
+// CONFIG.intro.freezeAtBottom) means there is no residual downward momentum
+// to overshoot the funnel target, so the film settles with no rebound.
 const fadeAttr = {
     armed: false,         // crossfade started, waiting for the right swing phase
     endAt: 0,             // perf-clock seconds when the crossfade ends (failsafe)
     lastY: NaN,           // meanFreeY of the previous frame (direction detection)
-    minY: Infinity,       // running swing trough since the fade started
-    maxY: -Infinity,      // running swing peak since the fade started
+    wasDown: false,       // the film was moving DOWN on the previous frame
+    troughs: 0,           // bottom turning points counted since the fade started
 };
 
 function disarmFadeAttr() {
     fadeAttr.armed = false;
     fadeAttr.lastY = NaN;
-    fadeAttr.minY = Infinity;
-    fadeAttr.maxY = -Infinity;
+    fadeAttr.wasDown = false;
+    fadeAttr.troughs = 0;
 }
 
 function updateEndAttractor() {
@@ -240,13 +245,24 @@ function updateEndAttractor() {
     const y = meanFreeY();
     const prev = fadeAttr.lastY;
     fadeAttr.lastY = y;
-    if (y < fadeAttr.minY) fadeAttr.minY = y;
-    if (y > fadeAttr.maxY) fadeAttr.maxY = y;
-    const mid = (fadeAttr.minY + fadeAttr.maxY) / 2;
-    const goingDown = Number.isFinite(prev) && y < prev;
-    // Failsafe: if the film has all but settled and the swing condition never
+    if (!Number.isFinite(prev)) return;
+    const goingDown = y < prev;
+    const goingUp = y > prev;
+    // Trough = the film was moving down and has just turned upward. Direction
+    // is latched (wasDown) so flat frames (y == prev) don't break detection.
+    if (fadeAttr.wasDown && goingUp) {
+        fadeAttr.troughs++;
+        if (fadeAttr.troughs >= Math.max(1, Math.round(cfg.freezeTrough))) {
+            disarmFadeAttr();
+            engageIntro();
+            return;
+        }
+    }
+    if (goingDown) fadeAttr.wasDown = true;
+    else if (goingUp) fadeAttr.wasDown = false;
+    // Failsafe: if the film has all but settled and the trough condition never
     // fires, engage at the end of the crossfade so the funnel is guaranteed.
-    if ((goingDown && y < mid) || (performance.now() / 1000) >= fadeAttr.endAt) {
+    if ((performance.now() / 1000) >= fadeAttr.endAt) {
         disarmFadeAttr();
         engageIntro();
     }
@@ -1623,6 +1639,8 @@ const PARAM_SCHEMA = [
         { key: 'startDrift', min: 0, max: 0.05, step: 0.001, tip: 'Slow pre-parking zoom-out: fraction of zoom shed per second (0.01 = 1%/s). 0 = static start frame. Parking takes over from wherever the drift got to.' },
         { key: 'startDriftRamp', min: 0, max: 6, step: 0.1, tip: 'Seconds to ease the drift in from standstill after load/restart.' },
         { key: 'endAttractorLead', min: 0, max: 5, step: 0.1 },
+        { key: 'freezeTrough', min: 1, max: 2, step: 1, tip: 'Which bottom point (swing trough) after the crossfade starts triggers the final grab: 1 = the first time the film turns upward, 2 = the second.' },
+        { key: 'freezeAtBottom', bool: true, tip: 'ON: hard freeze — all film velocities are zeroed the moment it is grabbed at the trough, so it settles into the funnel with no rebound. OFF: legacy soft grab (attractor fights residual momentum).' },
         { key: 'attractorRamp', min: 0.1, max: 5, step: 0.05 },
         { key: 'strength', min: 1, max: 200, step: 1 },
         { key: 'damping', min: 0.85, max: 1, step: 0.001 },
@@ -1896,6 +1914,17 @@ function engageIntro() {
     introState.active = true;
     introState.startTime = performance.now() / 1000;
     introState.triggeredAt = phaseTime;
+    // Hard freeze at the grab point: zero every free node's velocity (Verlet:
+    // prev = pos) so the film has no residual momentum to overshoot the funnel
+    // target and bounce back — it settles from a dead stop at the bottom.
+    if (CONFIG.intro.freezeAtBottom) {
+        const { pos, prev, pinned, count } = mem;
+        for (let i = 0; i < count; i++) {
+            if (pinned[i]) continue;
+            const j = i * 3;
+            prev[j] = pos[j]; prev[j + 1] = pos[j + 1]; prev[j + 2] = pos[j + 2];
+        }
+    }
 }
 function disengageIntro() {
     introState.active = false;
@@ -2248,9 +2277,9 @@ function scheduleCrossfade() {
         // The button flips to "replay intro" only when the fade completes —
         // until then a click still counts as "skip" (fast-forwards the fade).
         zoomCtl.fadeDoneTimer = setTimeout(() => setIntroUiState('done'), dur * 1000);
-        // Arm the end-attractor swing-phase trigger: from now on the frame
-        // loop watches the film and engages the attractor on a downward pass
-        // past mid-swing (or at the latest when the fade ends).
+        // Arm the end-attractor trough trigger: from now on the frame loop
+        // watches the film and grabs it at the freezeTrough-th bottom turning
+        // point of its swing (or at the latest when the fade ends).
         disarmFadeAttr();
         fadeAttr.armed = true;
         fadeAttr.endAt = performance.now() / 1000 + dur;
@@ -2394,8 +2423,8 @@ function updateZoom(dt) {
     zc.lnZ = Math.max(0, lnFrom * (1 - p));
     zc.Z = Math.exp(zc.lnZ);
     // End-of-parking attractor: no longer triggered here by time-to-landing —
-    // the swing-phase trigger in updateEndAttractor() engages it during the
-    // crossfade, on a downward pass of the film past its mid-swing point.
+    // the trough trigger in updateEndAttractor() engages it during the
+    // crossfade, at a bottom turning point of the film's swing.
     if (x >= 1 && zc.phase !== 'landed') {
         zc.lnZ = 0; zc.Z = 1;
         zc.phase = 'landed';
