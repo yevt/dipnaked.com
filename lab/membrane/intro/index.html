@@ -7,13 +7,38 @@
     <link rel="icon" href="../../../logo-v2.png" />
     <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" />
     <link rel="stylesheet" href="../../../style.css" />
+    <script>
+        // Arm the intro only when JS actually runs — bots / no-JS visitors get
+        // the plain page. If the intro module fails to boot (old cache, network),
+        // auto-disarm after 7s so nobody is left staring at a black screen.
+        //
+        // Returning visitors: once the intro has fully played (or was skipped),
+        // membrane.js stores INTRO_VERSION in localStorage. A matching value
+        // here means "already seen" — the intro is NOT armed, the page renders
+        // plain immediately, and membrane.js boots straight into the done state
+        // (logo + links visible, "replay intro" in the corner). Bump the
+        // version to make everyone see the intro again.
+        // NOTE: keep INTRO_VERSION / the storage key in sync with
+        // /lab/membrane/intro/membrane.js.
+        (function () {
+            var INTRO_VERSION = '1';
+            var played = false;
+            try { played = localStorage.getItem('dipnaked.introPlayedVersion') === INTRO_VERSION; } catch (e) { /* private mode etc. — just play */ }
+            if (played) return;
+            document.documentElement.classList.add('intro-armed');
+            setTimeout(function () {
+                if (!window.MEMBRANE) document.documentElement.classList.remove('intro-armed');
+            }, 7000);
+        })();
+    </script>
     <style>
         /* No scrollbars during the intro — the layout is CSS-scaled and any
-           overflow would shift the logo position between runs. */
-        html, body { overflow: hidden; }
-        /* Membrane canvas overlay: fullscreen, transparent, ABOVE everything.
-           During the intro the physics is the star; the canvas is allowed to
-           cover the layout. It fades out during the final crossfade. */
+           overflow would shift the logo position between runs. .intro-armed
+           covers the pre-boot window (head script); .intro-playing is toggled
+           by membrane.js for the whole flight, including replays. */
+        .intro-armed, .intro-armed body,
+        .intro-playing, .intro-playing body { overflow: hidden; }
+        /* Membrane canvas overlay: fullscreen, transparent, ABOVE everything. */
         #membrane-canvas {
             position: fixed;
             inset: 0;
@@ -29,31 +54,34 @@
             transform-origin: 0 0;
             will-change: transform;
         }
-        /* All layout text and the logo fade in together at the end. */
-        .center-block { opacity: 0; }
-        /* Dev restart button — always visible, next to the lil-gui panel */
-        #restart-btn {
+        /* Layout hidden while the intro plays; it fades in at the crossfade.
+           Only applies when armed — the no-JS page stays fully visible. */
+        .intro-armed .center-block { opacity: 0; }
+        /* Intro button: bottom-right, in the site's own type. One element, two
+           roles driven by membrane.js: "skip intro" while the intro plays,
+           "replay intro" once it's done. Starts invisible so the no-JS page
+           stays clean; membrane.js reveals it on boot. */
+        #replay-btn {
             position: fixed;
-            top: 8px;
-            right: 260px;
-            z-index: 10000;
-            background: #1a1a1a;
-            color: #ccc;
-            border: 1px solid #444;
-            font: 500 11px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-            padding: 8px 14px;
+            right: 24px;
+            bottom: 20px;
+            z-index: 600;
+            background: none;
+            border: none;
+            padding: 8px 4px;
+            font: inherit;
+            font-size: 0.8em;
+            letter-spacing: 0.12em;
+            color: var(--color-tagline, #777);
             cursor: pointer;
-            user-select: none;
-            border-radius: 2px;
-            transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+            opacity: 0;
+            pointer-events: none;
+            transition: color 0.2s ease;
         }
-        #restart-btn:hover  { background: #2a2a2a; border-color: #666; color: #fff; }
-        #restart-btn:active { background: #0d0d0d; transform: translateY(1px); }
+        #replay-btn:hover { color: var(--color-text, #ddd); }
     </style>
 </head>
-<body data-intro-dev>
+<body data-intro-gui>
     <div id="layout-zoom">
     <div class="center-block">
         <a href="/"><img src="../../../logo-v2.png" alt="dipnaked" class="logo" id="logo-img" /></a>
@@ -69,7 +97,7 @@
     </div>
     </div>
 
-    <button id="restart-btn" title="Replay the intro">restart</button>
+    <button id="replay-btn" title="Replay the intro">replay intro</button><!-- label/role managed by membrane.js: skip intro ↔ replay intro -->
 
     <script type="importmap">
     {
