@@ -164,8 +164,16 @@ const CONFIG = {
     // healing back to flat, the film settles into the logo funnel.
     // ------------------------------------------------------------------------
     intro: {
+        // Lab-only rollout guard. The root page imports this same file, but it
+        // does not opt into data-intro-time-brake yet; production therefore
+        // keeps the legacy trough grab until the lab result is approved.
+        timeBrake: document.body.hasAttribute('data-intro-time-brake'),
+        brakeFallbackPeriod: 1.72,// s of SIMULATION time; only used if too few clean troughs were measured before the fade
+        brakeEndRate: 0.15,       // keep a little SIM time moving until the real final trough confirms the phase
+        fadeTailOpacity: 0.015,   // hold this last sliver of film opacity until that same confirmed trough
+        brakeTailTimeout: 3.0,    // clamped foreground seconds allowed for the nearly invisible phase-confirmation tail
         enabled: true,            // master switch for the attractor machinery (physics hook + manual snap)
-        endAttractor: true,       // engage the final grab during the crossfade: once the fade has started, the film is caught exactly at a swing TROUGH — the bottom turning point of its oscillation (see updateEndAttractor)
+        endAttractor: true,       // legacy production finish; bypassed when timeBrake is enabled
         freezeTrough: 1,          // which bottom point (trough) after the crossfade start triggers the grab: 1 = first trough, 2 = second trough
         freezeAtBottom: true,     // hard freeze at the trough: zero all film velocities the moment it is grabbed, so it settles into the funnel with NO rebound (OFF = legacy soft grab, attractor fights the residual momentum)
         endAttractorLead: 1.6,    // (legacy, unused by the swing-phase trigger) s before landing when the attractor starts ramping in
@@ -203,7 +211,7 @@ const CONFIG = {
         logoRimTopFrac: 0.17,     // rim top edge as a fraction of the logo image square height (pixel-measured 0.1667, hand-tuned)
         crossfade: true,          // after landing the canvas fades OUT while the static logo fades IN (set false for tuning: both layers visible)
         fadeDelay: 0.0,           // s after landing (Z=1) before the crossfade starts
-        fadeDuration: 3.45,       // s of the crossfade (4.32 − 20%) — about two full oscillation cycles: the sloshing film dissolves into the static logo
+        fadeDuration: 3.45,       // nominal pacing ceiling; the confirmed next trough remains authoritative
     },
 };
 
@@ -266,6 +274,359 @@ function updateEndAttractor() {
         disarmFadeAttr();
         engageIntro();
     }
+}
+
+// ----------------------------------------------------------------------------
+// NATURAL END-OF-INTRO TIME BRAKE (lab rollout)
+// ----------------------------------------------------------------------------
+// The oscillator coordinate is the membrane displacement projected onto the
+// final logo funnel. A local maximum is therefore the natural lower turning
+// point that looks most like the static mark, rather than merely the lowest
+// arithmetic mean of a torn, uneven mesh.
+const oscillationPhase = {
+    simTime: 0,
+    lastValue: NaN,
+    lastDelta: 0,
+    lastSampleTime: 0,
+    wasDeepening: false,
+    lastTroughTime: -Infinity,
+    troughTimes: [],
+    troughSerial: 0,
+};
+
+const timeBrakeState = {
+    waitingForStartTrough: false,
+    waitingElapsed: 0,
+    active: false,
+    locked: false,
+    reachedEnd: false,
+    wallStart: 0,
+    wallElapsed: 0,
+    duration: 0,
+    simBudget: 0,
+    nominalEmitted: 0,
+    emitted: 0,
+    fadeProgress: 0,
+    completionProgress: 0,
+    startAfterTroughSerial: Infinity,
+    startTroughTime: 0,
+    targetSimTime: 0,
+    targetTroughSerial: Infinity,
+    chosenTrough: 0,
+    period: 0,
+    baseRate: 1,
+    endRate: 0,
+    curve: null,
+    previousPose: null,
+    lockReason: '',
+};
+
+function resetOscillationPhase() {
+    oscillationPhase.simTime = 0;
+    oscillationPhase.lastValue = NaN;
+    oscillationPhase.lastDelta = 0;
+    oscillationPhase.lastSampleTime = 0;
+    oscillationPhase.wasDeepening = false;
+    oscillationPhase.lastTroughTime = -Infinity;
+    oscillationPhase.troughTimes.length = 0;
+    oscillationPhase.troughSerial = 0;
+}
+
+function cancelFinalTimeBrake() {
+    timeBrakeState.waitingForStartTrough = false;
+    timeBrakeState.waitingElapsed = 0;
+    timeBrakeState.active = false;
+    timeBrakeState.locked = false;
+    timeBrakeState.reachedEnd = false;
+    timeBrakeState.wallElapsed = 0;
+    timeBrakeState.simBudget = 0;
+    timeBrakeState.nominalEmitted = 0;
+    timeBrakeState.emitted = 0;
+    timeBrakeState.fadeProgress = 0;
+    timeBrakeState.completionProgress = 0;
+    timeBrakeState.startAfterTroughSerial = Infinity;
+    timeBrakeState.startTroughTime = 0;
+    timeBrakeState.targetSimTime = 0;
+    timeBrakeState.targetTroughSerial = Infinity;
+    timeBrakeState.chosenTrough = 0;
+    timeBrakeState.baseRate = 1;
+    timeBrakeState.endRate = 0;
+    timeBrakeState.curve = null;
+    timeBrakeState.previousPose = null;
+    timeBrakeState.lockReason = '';
+}
+
+function logoModeAmplitude() {
+    const { pos, home, ringOf, count, R } = mem;
+    let projection = 0;
+    let norm = 0;
+    for (let i = 0; i < count; i++) {
+        const depth = funnelDepth(ringOf[i] / R);
+        if (depth <= 1e-6) continue;
+        const j = i * 3;
+        projection += (home[j + 1] - pos[j + 1]) * depth;
+        norm += depth * depth;
+    }
+    return norm > 1e-9 ? projection / norm : 0;
+}
+
+function recentOscillationPeriod() {
+    const ts = oscillationPhase.troughTimes;
+    const periods = [];
+    for (let i = Math.max(1, ts.length - 4); i < ts.length; i++) {
+        const p = ts[i] - ts[i - 1];
+        if (p >= 0.45 && p <= 5) periods.push(p);
+    }
+    if (!periods.length) return Math.max(0.45, CONFIG.intro.brakeFallbackPeriod);
+    // The torn membrane is not a stationary oscillator: the next interval can
+    // either lengthen or shorten as local flap modes exchange energy. The last
+    // complete cycle is a safer budget than extrapolating a fragile trend; the
+    // positive end-rate handles the remaining few-percent error at low opacity.
+    const latest = periods[periods.length - 1];
+    return latest;
+}
+
+function freezeFinalTimeBrake(reason, restorePreviousPose = false) {
+    if (!timeBrakeState.active || timeBrakeState.locked) return;
+    if (restorePreviousPose && timeBrakeState.previousPose) {
+        // The direction change is observed one fixed step after the true local
+        // maximum. Restore that preceding pose, then stop scheduling physics.
+        mem.pos.set(timeBrakeState.previousPose);
+        oscillationPhase.simTime = oscillationPhase.lastSampleTime;
+    }
+    // Physics is no longer scheduled after this point, but zero the Verlet
+    // history as well so a later debug/replay path can never resurrect momentum.
+    mem.prev.set(mem.pos);
+    timeBrakeState.locked = true;
+    timeBrakeState.reachedEnd = true;
+    timeBrakeState.lockReason = reason;
+    accumulator = 0;
+    console.log('[time brake] frozen ' + JSON.stringify({
+        reason,
+        trough: timeBrakeState.chosenTrough,
+        period: +timeBrakeState.period.toFixed(3),
+        simTime: +oscillationPhase.simTime.toFixed(3),
+        targetSimTime: +timeBrakeState.targetSimTime.toFixed(3),
+        emitted: +timeBrakeState.emitted.toFixed(3),
+        fadeProgress: +timeBrakeState.fadeProgress.toFixed(3),
+        eventProgress: +timeBrakeState.completionProgress.toFixed(3),
+        wallElapsed: +timeBrakeState.wallElapsed.toFixed(3),
+        attractorActive: introState.active,
+        phaseValue: +oscillationPhase.lastValue.toFixed(4),
+        phaseStep: +oscillationPhase.lastDelta.toFixed(6),
+        measuredTroughs: oscillationPhase.troughTimes.map(t => +t.toFixed(3)),
+    }));
+}
+
+function recordOscillationSample() {
+    if (!CONFIG.intro.timeBrake || (phase !== Phase.PIERCED && phase !== Phase.HEAL)) return;
+    const value = logoModeAmplitude();
+    const prev = oscillationPhase.lastValue;
+    const sampleTime = oscillationPhase.simTime;
+    if (Number.isFinite(prev)) {
+        const delta = value - prev;
+        oscillationPhase.lastDelta = delta;
+        const deepening = delta > 1e-6;
+        const rising = delta < -1e-6;
+        // Reject the small high-frequency flap ripples: the principal membrane
+        // mode is ~1.7s, so valid lower turning points cannot be this close.
+        if (oscillationPhase.wasDeepening && rising
+            && oscillationPhase.lastSampleTime - oscillationPhase.lastTroughTime >= 0.45) {
+            const troughTime = oscillationPhase.lastSampleTime;
+            oscillationPhase.lastTroughTime = troughTime;
+            oscillationPhase.troughTimes.push(troughTime);
+            if (oscillationPhase.troughTimes.length > 7) oscillationPhase.troughTimes.shift();
+            oscillationPhase.troughSerial++;
+            if (timeBrakeState.waitingForStartTrough
+                && oscillationPhase.troughSerial >= timeBrakeState.startAfterTroughSerial) {
+                // Detection is causal: this is one fixed step after the exact
+                // lower turning point. Starting here avoids rewinding mutable
+                // physics state; the 8 ms phase offset is visually negligible.
+                beginFinalTimeBrake(timeBrakeState.duration, troughTime);
+            } else if (timeBrakeState.active && !timeBrakeState.locked
+                && oscillationPhase.troughSerial >= timeBrakeState.targetTroughSerial) {
+                // Opacity and simulation stop are committed by one controller
+                // in this very tick, before the next render. No visible frame
+                // can contain a frozen, partly opaque membrane.
+                completePhaseLockedCrossfade('natural trough', true);
+                return;
+            }
+        }
+        if (deepening) oscillationPhase.wasDeepening = true;
+        else if (rising) oscillationPhase.wasDeepening = false;
+    }
+    oscillationPhase.lastValue = value;
+    oscillationPhase.lastSampleTime = sampleTime;
+    if (timeBrakeState.active && !timeBrakeState.locked) {
+        if (!timeBrakeState.previousPose || timeBrakeState.previousPose.length !== mem.pos.length) {
+            timeBrakeState.previousPose = new Float32Array(mem.pos.length);
+        }
+        timeBrakeState.previousPose.set(mem.pos);
+    }
+}
+
+// Monotone base envelope with zero slope at both ends:
+//   b(u) = (1-u)^2 / ((1-u)^2 + (k*u)^2)
+// The actual speed v=e+(1-e)b retains a small terminal floor e until the real
+// trough is confirmed. That keeps a forecast miss from stopping time early.
+function brakeSpeed(u, k) {
+    const a = 1 - u;
+    const b = k * u;
+    const den = a * a + b * b;
+    return den > 1e-12 ? (a * a) / den : 0;
+}
+
+function brakeCurveArea(k, steps = 256) {
+    let sum = 0.5 * (brakeSpeed(0, k) + brakeSpeed(1, k));
+    for (let i = 1; i < steps; i++) sum += brakeSpeed(i / steps, k);
+    return sum / steps;
+}
+
+function buildBrakeCurve(targetArea, endRate = 0, steps = 256) {
+    const floor = Math.max(0, Math.min(0.25, endRate));
+    const baseArea = Math.max(0.005, Math.min(0.995,
+        (targetArea - floor) / Math.max(1e-6, 1 - floor)));
+    let lo = 1e-3, hi = 1e3;
+    for (let i = 0; i < 36; i++) {
+        const mid = Math.sqrt(lo * hi);
+        if (brakeCurveArea(mid, steps) > baseArea) lo = mid;
+        else hi = mid;
+    }
+    const k = Math.sqrt(lo * hi);
+    const cumulative = new Float64Array(steps + 1);
+    let total = 0;
+    let prevSpeed = floor + (1 - floor) * brakeSpeed(0, k);
+    for (let i = 1; i <= steps; i++) {
+        const speed = floor + (1 - floor) * brakeSpeed(i / steps, k);
+        total += (prevSpeed + speed) * 0.5 / steps;
+        cumulative[i] = total;
+        prevSpeed = speed;
+    }
+    for (let i = 1; i <= steps; i++) cumulative[i] /= total;
+    return { k, steps, total, cumulative, endRate: floor };
+}
+
+function brakeCurveProgress(curve, u) {
+    if (u <= 0) return 0;
+    if (u >= 1) return 1;
+    const x = u * curve.steps;
+    const i = Math.floor(x);
+    const f = x - i;
+    return curve.cumulative[i] * (1 - f) + curve.cumulative[i + 1] * f;
+}
+
+function armFinalCycleFade(duration) {
+    cancelFinalTimeBrake();
+    disengageIntro();
+    disarmFadeAttr();
+    timeBrakeState.waitingForStartTrough = true;
+    timeBrakeState.waitingElapsed = 0;
+    timeBrakeState.duration = Math.max(0.2, duration);
+    timeBrakeState.startAfterTroughSerial = oscillationPhase.troughSerial + 1;
+    console.log('[time brake] armed ' + JSON.stringify({
+        afterTrough: timeBrakeState.startAfterTroughSerial,
+        measuredTroughs: oscillationPhase.troughTimes.map(t => +t.toFixed(3)),
+    }));
+}
+
+function beginFinalTimeBrake(duration, startTroughTime) {
+    const requestedDuration = Math.max(0.2, duration);
+    const baseRate = Math.max(0.05, CONFIG.timing.timeScale);
+    const period = recentOscillationPeriod();
+    // The start marker was confirmed one fixed step late. Targeting
+    // startTrough + predictedPeriod + that same causal step makes the nominal
+    // budget exactly one complete oscillation from the current physical state.
+    accumulator = 0;
+    const continuousTime = oscillationPhase.simTime;
+    const target = startTroughTime + period + FIXED_DT;
+    const budget = Math.max(FIXED_DT, target - continuousTime + 1e-9);
+    // Preserve a continuous 1× entry speed. If tuning makes the requested fade
+    // shorter than the cycle itself, lengthen the fade instead of accelerating.
+    const dur = Math.max(requestedDuration, budget / (baseRate * 0.96));
+    const ratio = budget / (dur * baseRate);
+    // For unusually long fades / high global timeScale, lower the terminal
+    // floor so the requested mean still has a representable monotone curve.
+    const requestedEndRate = Math.max(0.005, Math.min(0.2, CONFIG.intro.brakeEndRate));
+    const maxContinuousEndRate = Math.max(0.001, (ratio - 0.005) / 0.995);
+    const endRate = Math.min(requestedEndRate, maxContinuousEndRate);
+    const curve = buildBrakeCurve(ratio, endRate);
+    timeBrakeState.waitingForStartTrough = false;
+    timeBrakeState.active = true;
+    timeBrakeState.wallStart = performance.now() / 1000;
+    timeBrakeState.wallElapsed = 0;
+    timeBrakeState.duration = dur;
+    timeBrakeState.simBudget = budget;
+    timeBrakeState.nominalEmitted = 0;
+    timeBrakeState.emitted = 0;
+    timeBrakeState.fadeProgress = 0;
+    timeBrakeState.completionProgress = 0;
+    timeBrakeState.startTroughTime = startTroughTime;
+    timeBrakeState.targetSimTime = target;
+    timeBrakeState.targetTroughSerial = oscillationPhase.troughSerial + 1;
+    timeBrakeState.chosenTrough = 1;
+    timeBrakeState.period = period;
+    timeBrakeState.baseRate = baseRate;
+    timeBrakeState.endRate = endRate;
+    timeBrakeState.curve = curve;
+    timeBrakeState.previousPose = new Float32Array(mem.pos);
+    startPhaseLockedVisualFade();
+    console.log('[time brake] start ' + JSON.stringify({
+        period: +period.toFixed(3),
+        trough: 1,
+        startTrough: +startTroughTime.toFixed(3),
+        targetTroughSerial: timeBrakeState.targetTroughSerial,
+        simBudget: +budget.toFixed(3),
+        fadeDuration: +dur.toFixed(3),
+        meanSpeed: +ratio.toFixed(3),
+        endRate: +endRate.toFixed(3),
+        measuredTroughs: oscillationPhase.troughTimes.map(t => +t.toFixed(3)),
+        attractorActive: introState.active,
+    }));
+}
+
+function finalPhysicsDelta(rawDt, normalDt) {
+    if (timeBrakeState.waitingForStartTrough) {
+        timeBrakeState.waitingElapsed += rawDt;
+        const waitLimit = Math.max(2.5, recentOscillationPeriod() * 1.5);
+        if (timeBrakeState.waitingElapsed >= waitLimit) {
+            // Extremely damped/tuned membranes may no longer produce a clean
+            // marker. Start a safe unphased fallback; its own near-invisible
+            // watchdog completes without ever exposing a frozen canvas.
+            console.warn('[time brake] no start trough; using phase-safe fallback');
+            beginFinalTimeBrake(timeBrakeState.duration, oscillationPhase.simTime - FIXED_DT);
+            return 0;
+        }
+    }
+    if (!timeBrakeState.active) return normalDt;
+    if (timeBrakeState.locked || !timeBrakeState.curve) return 0;
+    const previousElapsed = timeBrakeState.wallElapsed;
+    timeBrakeState.wallElapsed += rawDt;
+    const u = Math.max(0, Math.min(1, timeBrakeState.wallElapsed / timeBrakeState.duration));
+    const desired = timeBrakeState.simBudget * brakeCurveProgress(timeBrakeState.curve, u);
+    const phaseProgress = timeBrakeState.simBudget > 1e-9
+        ? Math.max(0, Math.min(1, desired / timeBrakeState.simBudget)) : u;
+    // Opacity follows the simulated fraction of the final cycle, not a second
+    // independent clock. A mild ease-out keeps the downward half legible while
+    // leaving only a tiny residue if this oscillator reaches its trough early.
+    const tailOpacity = Math.max(1 / 255, Math.min(0.05, CONFIG.intro.fadeTailOpacity));
+    const phaseFade = 1 - Math.pow(1 - phaseProgress, 1.5);
+    timeBrakeState.fadeProgress = Math.min(1 - tailOpacity, phaseFade);
+    const nominalDelta = Math.max(0, desired - timeBrakeState.nominalEmitted);
+    timeBrakeState.nominalEmitted = desired;
+    const tailWallDelta = Math.max(0, timeBrakeState.wallElapsed - timeBrakeState.duration)
+        - Math.max(0, previousElapsed - timeBrakeState.duration);
+    const tailDelta = tailWallDelta * timeBrakeState.baseRate * timeBrakeState.endRate;
+    const delta = nominalDelta + tailDelta;
+    timeBrakeState.emitted += delta;
+    if (u >= 1) {
+        timeBrakeState.reachedEnd = true;
+        if (timeBrakeState.wallElapsed - timeBrakeState.duration
+            >= Math.max(0.25, CONFIG.intro.brakeTailTimeout)) {
+            completePhaseLockedCrossfade('phase watchdog', false);
+            return 0;
+        }
+    }
+    return delta;
 }
 
 // Target funnel profile: depth as a function of normalized radius t = r/R.
@@ -733,7 +1094,12 @@ let cycleIndex = 0;
 let cycleRng = mulberry32(1); // seeded in buildJitter; drives per-cycle variation
 let dropUsed = false;         // one-shot guard: once the ball fires, no auto-repeat
 
-function setPhase(p) { phase = p; phaseTime = 0; if (p === Phase.HEAL) healedAt = -1; }
+function setPhase(p) {
+    phase = p;
+    phaseTime = 0;
+    if (p === Phase.HEAL) healedAt = -1;
+    if (p === Phase.PIERCED && CONFIG.intro.timeBrake) resetOscillationPhase();
+}
 
 // Hard reset (boot, GUI restart, failsafe). Normal cycles flow through REST
 // without a reset, so residual sway carries over — no two cycles identical.
@@ -1415,7 +1781,8 @@ function tick(now) {
     // as a barely-visible slow-mo instead of teleporting the ball 2-6 frames.
     const rawDt = Math.min(0.033, (now - lastTime) / 1000);
     lastTime = now;
-    const dt = rawDt * CONFIG.timing.timeScale;
+    const timelineDt = rawDt * CONFIG.timing.timeScale;
+    const simDt = finalPhysicsDelta(rawDt, timelineDt);
     if (HOLD_DEPTH > 0 && phase === Phase.APPROACH) {
         // Fast-forward synchronously to the hold depth (immune to RAF throttling),
         // then freeze: render only, no physics, no phase clocks. Also stops at
@@ -1448,12 +1815,18 @@ function tick(now) {
             + (window.__holdDone ? ' done' : ' ...'));
         return;
     }
-    accumulator += dt;
-    phaseTime += dt;
+    accumulator += simDt;
+    phaseTime += simDt;
 
     while (accumulator >= FIXED_DT) {
         accumulator -= FIXED_DT;
+        const wasOscillating = phase === Phase.PIERCED || phase === Phase.HEAL;
         physicsStep(FIXED_DT);
+        if (wasOscillating && CONFIG.intro.timeBrake) {
+            oscillationPhase.simTime += FIXED_DT;
+            recordOscillationSample();
+            if (timeBrakeState.locked) break;
+        }
 
         if (phase === Phase.APPROACH) {
             // Punch-through: enough of the center has let go — the point passes.
@@ -1535,8 +1908,9 @@ function tick(now) {
     mem.geometry.attributes.position.needsUpdate = true;
     updateColors();
     updateContactDebug();
-    updateZoom(dt);
+    updateZoom(timelineDt);
     updateEndAttractor();
+    updatePhaseLockedVisualFade();
     // Once the ball has FULLY left the viewport (after having been seen on
     // screen), it disappears for good — no matter which phase of the scenario
     // it happens in. Reset only by a restart.
@@ -1635,7 +2009,11 @@ const PARAM_SCHEMA = [
         { key: 'timeScale', min: 0.05, max: 3, step: 0.05 },
         { key: 'restPause', min: 0, max: 5, step: 0.1 },
     ] },
-    { id: 'intro', title: 'intro (attractor → logo)', obj: () => CONFIG.intro, params: [
+    { id: 'intro', title: 'intro (time brake / attractor)', obj: () => CONFIG.intro, params: [
+        { key: 'timeBrake', bool: true, tip: 'Lab finish: wait for a lower turning point, then phase-lock one final slowed oscillation to the crossfade. OFF keeps the legacy attractor finish.' },
+        { key: 'brakeFallbackPeriod', min: 0.5, max: 4, step: 0.01, tip: 'Fallback period in simulation seconds; normally the period is measured automatically from recent troughs.' },
+        { key: 'brakeEndRate', min: 0.005, max: 0.2, step: 0.005, tip: 'Small terminal simulation rate kept until the real target trough is confirmed.' },
+        { key: 'fadeTailOpacity', min: 0.004, max: 0.05, step: 0.001, tip: 'Nearly invisible canvas remainder held until the real target trough; then it becomes exactly zero.' },
         { key: 'startDrift', min: 0, max: 0.05, step: 0.001, tip: 'Slow pre-parking zoom-out: fraction of zoom shed per second (0.01 = 1%/s). 0 = static start frame. Parking takes over from wherever the drift got to.' },
         { key: 'startDriftRamp', min: 0, max: 6, step: 0.1, tip: 'Seconds to ease the drift in from standstill after load/restart.' },
         { key: 'endAttractorLead', min: 0, max: 5, step: 0.1 },
@@ -2254,17 +2632,65 @@ function setIntroUiState(state) {
     btn.style.pointerEvents = 'auto';
 }
 
+function setPhaseLockedFadeProgress(progress) {
+    const p = Math.max(0, Math.min(1, progress));
+    const canvas = renderer.domElement;
+    const block = document.querySelector('.center-block');
+    // Lab fade is sampled from the same clamped RAF clock as physics. Keeping
+    // CSS transitions out of this path prevents background throttling from
+    // letting opacity finish while simulation time is paused.
+    canvas.style.transition = 'none';
+    canvas.style.opacity = String(1 - p);
+    if (block) {
+        block.style.transition = 'none';
+        block.style.opacity = String(p);
+    }
+}
+
+function startPhaseLockedVisualFade() {
+    setPhaseLockedFadeProgress(0);
+}
+
+function updatePhaseLockedVisualFade() {
+    if (!CONFIG.intro.timeBrake || !timeBrakeState.active || timeBrakeState.locked) return;
+    setPhaseLockedFadeProgress(timeBrakeState.fadeProgress);
+}
+
+function completePhaseLockedCrossfade(reason, restorePreviousPose) {
+    if (!timeBrakeState.active || timeBrakeState.locked) return;
+    // Hide first, freeze second, render last. Even the one-step rollback from
+    // the causal trough detector is therefore never exposed on screen.
+    timeBrakeState.completionProgress = timeBrakeState.fadeProgress;
+    timeBrakeState.fadeProgress = 1;
+    setPhaseLockedFadeProgress(1);
+    clearTimeout(zoomCtl.fadeDoneTimer);
+    markIntroPlayed();
+    setIntroUiState('done');
+    freezeFinalTimeBrake(reason, restorePreviousPose);
+}
+
 function scheduleCrossfade() {
     clearTimeout(zoomCtl.fadeTimer);
     clearTimeout(zoomCtl.fadeDoneTimer);
-    // Landing IS the end of the intro flight — remember it now, regardless of
-    // whether the cosmetic crossfade runs (it's off in tuning mode).
-    markIntroPlayed();
-    if (!CONFIG.intro.crossfade) { setIntroUiState('done'); return; }
+    if (!CONFIG.intro.crossfade) {
+        markIntroPlayed();
+        setIntroUiState('done');
+        return;
+    }
+    // Production keeps its established landing semantics. The lab marks the
+    // intro played only after its phase-locked final cycle actually completes.
+    if (!CONFIG.intro.timeBrake) markIntroPlayed();
     const canvas = renderer.domElement;
     const block = document.querySelector('.center-block');
     zoomCtl.fadeTimer = setTimeout(() => {
         const dur = CONFIG.intro.fadeDuration;
+        if (CONFIG.intro.timeBrake) {
+            // Landing only arms the finale. Free oscillation remains fully
+            // visible until the next natural lower turning point; that marker
+            // starts both the final cycle and the dissolve.
+            armFinalCycleFade(dur);
+            return;
+        }
         // Both ramps are LINEAR so the opacities always sum to 1: the film and
         // the logo art practically coincide, and a linear cross-dissolve keeps
         // the combined brightness constant — no dip in the middle of the fade.
@@ -2276,10 +2702,20 @@ function scheduleCrossfade() {
         }
         // The button flips to "replay intro" only when the fade completes —
         // until then a click still counts as "skip" (fast-forwards the fade).
-        zoomCtl.fadeDoneTimer = setTimeout(() => setIntroUiState('done'), dur * 1000);
-        // Arm the end-attractor trough trigger: from now on the frame loop
-        // watches the film and grabs it at the freezeTrough-th bottom turning
-        // point of its swing (or at the latest when the fade ends).
+        zoomCtl.fadeDoneTimer = setTimeout(() => {
+            setIntroUiState('done');
+            // Background tabs may not receive RAF while the CSS transition
+            // elapses. The canvas is fully transparent now, so finish safely
+            // without trying to catch up a backlog of physics steps.
+            if (timeBrakeState.active && !timeBrakeState.locked) {
+                freezeFinalTimeBrake('fade complete');
+            }
+        // Give the foreground RAF loop a few frames to consume the exact last
+        // fixed-step budget at u=1. Hidden tabs still hit this offscreen
+        // failsafe shortly afterwards without accumulating catch-up work.
+        }, dur * 1000);
+        // Legacy production finish, retained until the lab version is
+        // explicitly rolled out on the root page.
         disarmFadeAttr();
         fadeAttr.armed = true;
         fadeAttr.endAt = performance.now() / 1000 + dur;
@@ -2292,6 +2728,7 @@ function skipIntro() {
     clearTimeout(zoomCtl.fadeTimer);
     clearTimeout(zoomCtl.fadeDoneTimer);
     disarmFadeAttr();
+    cancelFinalTimeBrake();
     zoomCtl.lnZ = 0; zoomCtl.Z = 1;
     zoomCtl.phase = 'landed';
     applyZoom();
@@ -2315,6 +2752,7 @@ function skipIntro() {
 function bootIntroDone() {
     clearTimeout(zoomCtl.fadeTimer);
     clearTimeout(zoomCtl.fadeDoneTimer);
+    cancelFinalTimeBrake();
     const canvas = renderer.domElement;
     canvas.style.transition = 'none';
     canvas.style.opacity = '0';
@@ -2333,6 +2771,11 @@ function zoomInit() {
     clearTimeout(zoomCtl.fadeTimer);
     clearTimeout(zoomCtl.fadeDoneTimer);
     disarmFadeAttr();
+    cancelFinalTimeBrake();
+    if (CONFIG.intro.timeBrake) {
+        resetOscillationPhase();
+        accumulator = 0;
+    }
     const canvas = renderer.domElement;
     canvas.style.transition = 'none';
     canvas.style.opacity = '1';
@@ -2552,7 +2995,9 @@ window.MEMBRANE = { CONFIG, MATERIALS, gui, restart: restartAll,
     engageIntro, disengageIntro, zoom: zoomCtl, layoutReport: layoutSnapshot,
     get phase() { return phase; }, get mem() { return mem; }, get ballPos() { return ballPos; },
     get phaseTime() { return phaseTime; },
-    get introState() { return introState; } };
+    get introState() { return introState; },
+    get timeBrakeState() { return timeBrakeState; },
+    get oscillationPhase() { return oscillationPhase; } };
 
 // Intro button on the production page (#replay-btn): skip while playing,
 // replay when done. The lab pages' dev restart button always restarts.
