@@ -28,7 +28,17 @@
 // ============================================================================
 
 import * as THREE from 'three';
-import GUI from 'lil-gui';
+
+// One simulation, two presentations. Production runs the composed intro;
+// /lab/membrane/intro/ opts into a static-camera, healing, auto-repeat bench.
+const IS_MEMBRANE_LAB = document.body.hasAttribute('data-membrane-lab');
+const LAB_CONFIG_VERSION = 1;
+const LAB_PORTRAIT_FIT_ASPECT = 0.83;
+// The constructor belongs exclusively to the lab. Production has no query
+// escape hatch and never imports or builds lil-gui.
+const SHOULD_BUILD_GUI = IS_MEMBRANE_LAB;
+let GUI = null;
+if (SHOULD_BUILD_GUI) ({ default: GUI } = await import('lil-gui'));
 
 // ----------------------------------------------------------------------------
 // MATERIALS — presets are parameter sets for one solver, not separate math.
@@ -95,7 +105,7 @@ const CONFIG = {
         cameraDistance: 7.0,      // units from origin
         cameraHeight: 0.4,        // camera y
         lookAtY: -0.9,            // where the camera looks (y)
-        membraneTilt: -20,        // deg; matched to the logo rim ellipse aspect (~2.97 w/h)
+        membraneTilt: IS_MEMBRANE_LAB ? -24 : -20, // lab keeps the original close-up bench angle; intro matches the logo art
     },
     membrane: {
         radius: 1.6,              // disc radius
@@ -110,12 +120,12 @@ const CONFIG = {
     material: { ...MATERIALS.latex }, // live-editable copy (edited sliders → "custom")
     ball: {
         radius: 0.10,
-        startHeight: 8,           // spawn height above the film (along +normal)
+        startHeight: IS_MEMBRANE_LAB ? 3.2 : 8, // lab keeps the original above-frame bench launch; intro computes its fitted spawn
         speed: 0.72,              // units/s along -normal (slow, comet-like) — cruise speed near the film
-        startBoost: 6.8,          // launch speed multiplier ("thrown drop", 8.0 − 15%): ×speed at spawn, decays to 1× while falling
+        startBoost: IS_MEMBRANE_LAB ? 1 : 6.8, // lab shows the unassisted fall; intro uses the thrown-drop launch
         boostFadeEnd: 0.0,        // height above the film (units) where the boost has fully decayed to cruise speed
         boostCurve: 2.5,          // decay shape: 1 = linear, >1 = keeps speed longer and brakes harder near the end
-        exitDistance: 10.0,       // despawn this far below the film — large enough so the ball keeps falling until it's clearly off-screen
+        exitDistance: IS_MEMBRANE_LAB ? 4.5 : 10.0, // shorter lab cycle; production keeps the long off-screen fall
         capWrap: 0.0,             // fraction of the ball's footprint kept on the sphere surface (with slip). 0 = off — natural drape via collision + tension
         centerPin: false,         // hard-pin the film's center vertex to the ball's leading pole. OFF: the film drapes the sphere naturally — the tip mirrors the ball instead of pinching into the pole point
         color: '#05b2d3',         // matches the sphere as drawn in the logo art
@@ -151,7 +161,7 @@ const CONFIG = {
     },
     timing: {
         timeScale: 1.0,           // global slow-motion factor
-        restPause: 0.0,           // the drop is falling from the very first frame — no calm pause
+        restPause: IS_MEMBRANE_LAB ? 1.0 : 0.0, // lab breathes between cycles; intro falls immediately
         restartPause: 0.0,        // manual restart: also instant
     },
     debug: {
@@ -164,15 +174,14 @@ const CONFIG = {
     // healing back to flat, the film settles into the logo funnel.
     // ------------------------------------------------------------------------
     intro: {
-        // Lab-only rollout guard. The root page imports this same file, but it
-        // does not opt into data-intro-time-brake yet; production therefore
-        // keeps the legacy trough grab until the lab result is approved.
-        timeBrake: document.body.hasAttribute('data-intro-time-brake'),
+        // Production phase-lock rollout guard. The physics-lab page deliberately
+        // omits it because it has no landing/crossfade phase at all.
+        timeBrake: !IS_MEMBRANE_LAB && document.body.hasAttribute('data-intro-time-brake'),
         brakeFallbackPeriod: 1.72,// s of SIMULATION time; only used if too few clean troughs were measured before the fade
         brakeEndRate: 0.15,       // keep a little SIM time moving until the real final trough confirms the phase
         fadeTailOpacity: 0.015,   // hold this last sliver of film opacity until that same confirmed trough
         brakeTailTimeout: 3.0,    // clamped foreground seconds allowed for the nearly invisible phase-confirmation tail
-        enabled: true,            // master switch for the attractor machinery (physics hook + manual snap)
+        enabled: !IS_MEMBRANE_LAB,// attractor belongs to the composed intro, never to the free physics bench
         endAttractor: true,       // legacy production finish; bypassed when timeBrake is enabled
         freezeTrough: 1,          // which bottom point (trough) after the crossfade start triggers the grab: 1 = first trough, 2 = second trough
         freezeAtBottom: true,     // hard freeze at the trough: zero all film velocities the moment it is grabbed, so it settles into the funnel with NO rebound (OFF = legacy soft grab, attractor fights the residual momentum)
@@ -184,7 +193,7 @@ const CONFIG = {
         funnelNeckRadius: 0.06,   // radius (units) of the funnel bottom before it goes vertical
         funnelSharpness: 1.4,     // curve exponent — measured from the logo art profile (≈1.2–1.35)
         funnelRimFlat: 0.05,      // fraction of radius that stays near-flat before the drop begins
-        oneShot: true,            // after the ball leaves the frame, block any new drop — restart requires the user
+        oneShot: !IS_MEMBRANE_LAB,// lab heals and launches forever; production requires replay
         // -- static start framing (computed ONCE in zoomInit, camera does not move until parking) --
         edgePadFrac: 0.03,        // safety pad (fraction of the SHORT viewport side) around the physics envelope
         envDownFrac: 1.0,         // fraction of rupture.maxDepth reserved BELOW the rim (down-stretch)
@@ -209,7 +218,7 @@ const CONFIG = {
         layoutLiftPx: 11,         // lift of .center-block to balance the logo art's internal top padding
         logoRimWidthFrac: 0.86,   // rim ellipse width as a fraction of the logo image square — hand-tuned compromise: slightly wider than the pixel-measured 0.827 to split the bottom-arc gap (art ellipse is rounder than the film's projection)
         logoRimTopFrac: 0.17,     // rim top edge as a fraction of the logo image square height (pixel-measured 0.1667, hand-tuned)
-        crossfade: true,          // after landing the canvas fades OUT while the static logo fades IN (set false for tuning: both layers visible)
+        crossfade: !IS_MEMBRANE_LAB, // lab has no DOM logo layer; production dissolves into it
         fadeDelay: 0.0,           // s after landing (Z=1) before the crossfade starts
         fadeDuration: 3.45,       // nominal pacing ceiling; the confirmed next trough remains authoritative
     },
@@ -678,14 +687,22 @@ const camera = new THREE.PerspectiveCamera(
 
 function applyCamera() {
     camera.fov = CONFIG.scene.cameraFov;
-    camera.position.set(0, CONFIG.scene.cameraHeight, CONFIG.scene.cameraDistance);
+    // Keep the bench camera completely static, but fit its fixed view once for
+    // narrow portrait screens. The GUI distance remains the artistic baseline;
+    // only the responsive safety multiplier changes with viewport aspect.
+    const portraitFit = IS_MEMBRANE_LAB
+        ? Math.max(1, LAB_PORTRAIT_FIT_ASPECT / Math.max(0.01, camera.aspect))
+        : 1;
+    camera.position.set(0, CONFIG.scene.cameraHeight, CONFIG.scene.cameraDistance * portraitFit);
     camera.lookAt(0, CONFIG.scene.lookAtY, 0);
     // lookAt() refreshes matrixWorldInverse BEFORE applying the new quaternion
     // (three.js quirk): force a recompute so projections done before the first
     // render (boot-time calibration!) don't see a camera without its pitch.
     camera.updateMatrixWorld(true);
     camera.updateProjectionMatrix();
-    scene.background = null; // transparent over the DOM page
+    scene.background = IS_MEMBRANE_LAB
+        ? new THREE.Color(CONFIG.scene.background)
+        : null; // production remains transparent over the DOM landing page
 }
 
 // Tilted group: the membrane lives in its local XZ plane (normal = local +Y).
@@ -1746,12 +1763,14 @@ let lastTime = performance.now();
 // Debug: ?hold=<depth> freezes the physics as soon as the center vertex
 // reaches that depth during APPROACH — a deterministic still of the deep tip.
 const HOLD_DEPTH = (() => {
+    if (!IS_MEMBRANE_LAB) return 0;
     const v = parseFloat(new URLSearchParams(location.search).get('hold'));
     return Number.isFinite(v) && v > 0 ? v : 0;
 })();
 
 // Debug: ?ts / ?adh / ?grip override material params at load (sweep tooling).
 (() => {
+    if (!IS_MEMBRANE_LAB) return;
     const q = new URLSearchParams(location.search);
     const ts = parseFloat(q.get('ts'));
     if (Number.isFinite(ts) && ts > 0) CONFIG.material.tearStrain = ts;
@@ -1865,6 +1884,11 @@ function tick(now) {
         const startH = zoomCtl.spawnH > 0 ? zoomCtl.spawnH : CONFIG.ball.startHeight;
         ballPos.set(Math.cos(ang) * off, startH, Math.sin(ang) * off);
         clearSticky();           // fresh drop: no leftover latches or bans
+        // Visibility tracking belongs to one projectile, not the whole page.
+        // Without this reset, ballGone from cycle 1 immediately hides every
+        // automatically spawned ball after it.
+        ballSeen = false;
+        ballGone = false;
         ballEngaged = true;      // physics runs and the sphere is drawn as it falls
         ballMesh.visible = true;  // the film now wraps it, so it stays visible from any angle
         console.log('[ball spawn]', { startH, ang: ang.toFixed(3), off: off.toFixed(3),
@@ -1876,10 +1900,14 @@ function tick(now) {
         setPhase(Phase.APPROACH);
     } else if (phase === Phase.PIERCED || phase === Phase.HEAL) {
         if (ballEngaged && ballPos.y < -CONFIG.ball.exitDistance) {
-            // Keep the ball engaged (physics runs) and VISIBLE all the way down
-            // until it has clearly left the viewport. This makes rupture-time
-            // debugging much easier — the ball never mysteriously vanishes.
-            if (ballPos.y < -CONFIG.ball.exitDistance * 3) {
+            // The lab's exitDistance is randomizable down to 1, which can still
+            // be near screen center. Never despawn its sphere until the actual
+            // projection tracker has seen it leave the viewport. Production
+            // retains its deliberately deep offscreen fall.
+            const canDespawn = IS_MEMBRANE_LAB
+                ? ballGone
+                : ballPos.y < -CONFIG.ball.exitDistance * 3;
+            if (canDespawn) {
                 ballMesh.visible = false;
                 ballEngaged = false;
             }
@@ -1933,7 +1961,8 @@ function tick(now) {
 const PARAM_SCHEMA = [
     { id: 'scene', title: 'scene / camera', obj: () => CONFIG.scene, params: [
         { key: 'cameraFov', min: 15, max: 90, step: 1, apply: applyCamera },
-        { key: 'cameraDistance', min: 2, max: 20, step: 0.1, apply: applyCamera },
+        { key: 'cameraDistance', min: 2, max: 20, step: 0.1, apply: applyCamera,
+            tip: 'Base camera distance. On narrow portrait screens the lab applies a static fit multiplier so the membrane remains in frame.' },
         { key: 'cameraHeight', min: -5, max: 5, step: 0.05, apply: applyCamera },
         { key: 'lookAtY', min: -4, max: 4, step: 0.05, apply: applyCamera },
         { key: 'membraneTilt', min: -80, max: 80, step: 1, apply: applyTilt },
@@ -2010,7 +2039,7 @@ const PARAM_SCHEMA = [
         { key: 'restPause', min: 0, max: 5, step: 0.1 },
     ] },
     { id: 'intro', title: 'intro (time brake / attractor)', obj: () => CONFIG.intro, params: [
-        { key: 'timeBrake', bool: true, tip: 'Lab finish: wait for a lower turning point, then phase-lock one final slowed oscillation to the crossfade. OFF keeps the legacy attractor finish.' },
+        { key: 'timeBrake', bool: true, tip: 'Phase-locked finish: wait for a lower turning point, then synchronize one final slowed oscillation with the crossfade. OFF keeps the attractor fallback.' },
         { key: 'brakeFallbackPeriod', min: 0.5, max: 4, step: 0.01, tip: 'Fallback period in simulation seconds; normally the period is measured automatically from recent troughs.' },
         { key: 'brakeEndRate', min: 0.005, max: 0.2, step: 0.005, tip: 'Small terminal simulation rate kept until the real target trough is confirmed.' },
         { key: 'fadeTailOpacity', min: 0.004, max: 0.05, step: 0.001, tip: 'Nearly invisible canvas remainder held until the real target trough; then it becomes exactly zero.' },
@@ -2037,11 +2066,16 @@ const PARAM_SCHEMA = [
         { key: 'layoutLiftPx', min: -60, max: 60, step: 1, apply: applyLayoutLift },
         { key: 'logoRimWidthFrac', min: 0.5, max: 1, step: 0.01 },
         { key: 'logoRimTopFrac', min: 0, max: 0.5, step: 0.01 },
-        { key: 'crossfade', tip: 'When ON: after landing the canvas fades OUT while the static logo layout fades IN. When OFF (tuning mode): the logo layout is visible from the start so you can align the camera curve against the final target.' },
+        { key: 'crossfade', bool: true, tip: 'When ON: after landing the canvas fades OUT while the static logo layout fades IN. When OFF (tuning mode): the logo layout is visible from the start so you can align the camera curve against the final target.' },
         { key: 'fadeDelay', min: 0, max: 5, step: 0.1, tip: 'Seconds to wait after landing (Z=1) before the crossfade starts. Only used when crossfade is ON.' },
         { key: 'fadeDuration', min: 0.2, max: 10, step: 0.1, tip: 'Length of the crossfade (seconds). Only used when crossfade is ON.' },
     ] },
 ];
+
+// The shareable physics bench exposes only parameters that affect that bench.
+const ACTIVE_PARAM_SCHEMA = IS_MEMBRANE_LAB
+    ? PARAM_SCHEMA.filter((section) => section.id !== 'intro')
+    : PARAM_SCHEMA;
 
 // Randomize-locks. A lock only excludes a parameter (or a whole section) from
 // randomization and config paste — manual editing always stays available.
@@ -2087,13 +2121,25 @@ function buildGUI() {
     const gui = new GUI({ title: 'membrane lab' });
     injectGuiStyles();
     let presetCtrl = null;
+    const activeLockKeys = new Set();
+    for (const section of ACTIVE_PARAM_SCHEMA) {
+        activeLockKeys.add(section.id);
+        for (const param of section.params) activeLockKeys.add(`${section.id}.${param.key}`);
+    }
+
+    function setConfigStatus(text, title = '') {
+        const status = document.getElementById('config-status');
+        if (!status) return;
+        status.textContent = text;
+        status.title = title;
+    }
 
     // Runs the apply hooks after a batch change (randomize / paste): rebuild
     // once if any structural parameter changed, then refresh everything else.
     const structSnapshot = () => [CONFIG.membrane.radius, CONFIG.membrane.rings,
         CONFIG.membrane.segments, CONFIG.membrane.centerDensity].join('|');
-    function applyBatch(before) {
-        if (structSnapshot() !== before) restartAll(); // buildMembrane re-seeds jitter too
+    function applyBatch(before, { manualRestart = true } = {}) {
+        if (structSnapshot() !== before) restartAll(manualRestart); // buildMembrane re-seeds jitter too
         else buildJitter();
         applyCamera(); applyTilt(); applyBallLook();
         gui.controllersRecursive().forEach((c) => c.updateDisplay());
@@ -2113,44 +2159,139 @@ function buildGUI() {
             if (sec.markCustom && touched) CONFIG.materialPreset = 'custom';
         }
         applyBatch(before);
+        if (IS_MEMBRANE_LAB) setConfigStatus('edited config');
     }
 
-    function serializeConfig() {
-        const out = { materialPreset: CONFIG.materialPreset, locks: [...randLocks].sort() };
-        for (const sec of PARAM_SCHEMA) {
+    function collectConfigData() {
+        const locks = [...randLocks]
+            .filter((key) => activeLockKeys.has(key))
+            .sort();
+        const out = { materialPreset: CONFIG.materialPreset, locks };
+        for (const sec of ACTIVE_PARAM_SCHEMA) {
             out[sec.id] = {};
             for (const p of sec.params) out[sec.id][p.key] = sec.obj()[p.key];
         }
-        return JSON.stringify(out, null, 2);
+        if (IS_MEMBRANE_LAB) out.debug = { showContact: CONFIG.debug.showContact };
+        return out;
+    }
+
+    function serializeConfig(pretty = true) {
+        return JSON.stringify(collectConfigData(), null, pretty ? 2 : 0);
     }
 
     // Applies a parsed config: unknown keys are ignored, numbers are clamped
     // to their GUI ranges, and currently locked parameters are left untouched.
-    function applyConfigData(data) {
+    function applyConfigData(data, { respectLocks = true, manualRestart = true } = {}) {
         if (!data || typeof data !== 'object') return;
         const before = structSnapshot();
-        for (const sec of PARAM_SCHEMA) {
+        let materialTouched = false;
+        let materialBlocked = false;
+        for (const sec of ACTIVE_PARAM_SCHEMA) {
             const src = data[sec.id];
-            if (!src || typeof src !== 'object' || randLocks.has(sec.id)) continue;
+            if (!src || typeof src !== 'object') continue;
+            if (respectLocks && randLocks.has(sec.id)) {
+                if (sec.id === 'material') materialBlocked = true;
+                continue;
+            }
             for (const p of sec.params) {
-                if (isLocked(sec.id, p.key) || !(p.key in src)) continue;
+                if (!(p.key in src)) continue;
+                if (respectLocks && isLocked(sec.id, p.key)) {
+                    if (sec.id === 'material') materialBlocked = true;
+                    continue;
+                }
                 const v = src[p.key];
+                let applied = false;
                 if (p.color) {
-                    if (typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v)) sec.obj()[p.key] = v;
+                    if (typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v)) {
+                        sec.obj()[p.key] = v;
+                        applied = true;
+                    }
+                } else if (p.bool) {
+                    if (typeof v === 'boolean') {
+                        sec.obj()[p.key] = v;
+                        applied = true;
+                    }
                 } else if (typeof v === 'number' && Number.isFinite(v)) {
                     sec.obj()[p.key] = Math.min(p.max, Math.max(p.min, v));
+                    applied = true;
                 }
+                if (applied && sec.id === 'material') materialTouched = true;
             }
         }
         if (typeof data.materialPreset === 'string'
             && (data.materialPreset === 'custom' || MATERIALS[data.materialPreset])) {
-            CONFIG.materialPreset = data.materialPreset;
+            if (!respectLocks || !materialBlocked) CONFIG.materialPreset = data.materialPreset;
+            else if (materialTouched) CONFIG.materialPreset = 'custom';
+        }
+        if (IS_MEMBRANE_LAB && data.debug && typeof data.debug === 'object'
+            && typeof data.debug.showContact === 'boolean') {
+            CONFIG.debug.showContact = data.debug.showContact;
         }
         if (Array.isArray(data.locks)) {
             randLocks.clear();
-            for (const k of data.locks) if (typeof k === 'string') randLocks.add(k);
+            for (const key of data.locks) {
+                if (typeof key === 'string' && activeLockKeys.has(key)) randLocks.add(key);
+            }
         }
-        applyBatch(before);
+        applyBatch(before, { manualRestart });
+    }
+
+    function isPlainObject(value) {
+        return !!value && typeof value === 'object' && !Array.isArray(value);
+    }
+
+    // Share links are full, versioned snapshots. Validate the whole payload
+    // before touching live state so a truncated or hand-edited URL cannot be
+    // reported as reproduced after only a few fields happened to apply.
+    function isValidSharedSnapshot(data) {
+        if (!isPlainObject(data)
+            || typeof data.materialPreset !== 'string'
+            || !(data.materialPreset === 'custom' || MATERIALS[data.materialPreset])
+            || !Array.isArray(data.locks)
+            || data.locks.some((key) => typeof key !== 'string' || !activeLockKeys.has(key))) {
+            return false;
+        }
+        for (const section of ACTIVE_PARAM_SCHEMA) {
+            const src = data[section.id];
+            if (!isPlainObject(src)) return false;
+            for (const param of section.params) {
+                if (!(param.key in src)) return false;
+                const value = src[param.key];
+                if (param.color) {
+                    if (typeof value !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(value)) return false;
+                } else if (param.bool) {
+                    if (typeof value !== 'boolean') return false;
+                } else if (typeof value !== 'number' || !Number.isFinite(value)
+                    || value < param.min || value > param.max) {
+                    return false;
+                }
+            }
+        }
+        return !IS_MEMBRANE_LAB || (isPlainObject(data.debug)
+            && typeof data.debug.showContact === 'boolean');
+    }
+
+    function encodeConfigPayload(value) {
+        const bytes = new TextEncoder().encode(JSON.stringify(value));
+        let binary = '';
+        const chunkSize = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+            binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+        }
+        return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+    }
+
+    function decodeConfigPayload(encoded) {
+        if (typeof encoded !== 'string' || encoded.length === 0 || encoded.length > 16000
+            || !/^[A-Za-z0-9_-]+$/.test(encoded)) {
+            throw new Error('invalid config payload');
+        }
+        const padded = encoded.replace(/-/g, '+').replace(/_/g, '/')
+            + '='.repeat((4 - encoded.length % 4) % 4);
+        const binary = atob(padded);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return JSON.parse(new TextDecoder().decode(bytes));
     }
 
     async function copyConfig() {
@@ -2169,8 +2310,44 @@ function buildGUI() {
         if (!text) return;
         try {
             applyConfigData(JSON.parse(text));
+            setConfigStatus('pasted config');
         } catch {
             console.warn('membrane: could not parse pasted configuration');
+        }
+    }
+
+    async function copyShareLink() {
+        const payload = encodeConfigPayload({ v: LAB_CONFIG_VERSION, config: collectConfigData() });
+        const url = new URL(location.href);
+        url.search = '';
+        url.hash = `cfg=${payload}`;
+        const text = url.toString();
+        try {
+            await navigator.clipboard.writeText(text);
+            setConfigStatus('share link copied', `${payload.length} character config payload`);
+        } catch {
+            window.prompt('Copy this shareable lab link:', text);
+            setConfigStatus('share link ready', `${payload.length} character config payload`);
+        }
+    }
+
+    function loadSharedConfig() {
+        if (!IS_MEMBRANE_LAB || !location.hash) return;
+        const encoded = new URLSearchParams(location.hash.slice(1)).get('cfg');
+        if (!encoded) return;
+        try {
+            const payload = decodeConfigPayload(encoded);
+            if (!payload || payload.v !== LAB_CONFIG_VERSION
+                || !isValidSharedSnapshot(payload.config)) {
+                throw new Error('unsupported config payload');
+            }
+            // A shared link is a full snapshot. Existing locks must not make it
+            // reproduce differently; the snapshot's own locks are restored last.
+            applyConfigData(payload.config, { respectLocks: false, manualRestart: false });
+            setConfigStatus('shared config', `${encoded.length} character config payload`);
+        } catch (error) {
+            console.warn('membrane: ignored invalid shared configuration', error);
+            setConfigStatus('invalid shared config', 'Defaults were kept because the URL payload could not be read.');
         }
     }
 
@@ -2186,7 +2363,7 @@ function buildGUI() {
         folder.$title.appendChild(makeLockToggle(sec.id, `section "${sec.title}"`));
     }
 
-    for (const sec of PARAM_SCHEMA) {
+    for (const sec of ACTIVE_PARAM_SCHEMA) {
         const folder = gui.addFolder(sec.title);
         decorateFolder(folder, sec);
         if (sec.markCustom) {
@@ -2223,17 +2400,28 @@ function buildGUI() {
         if (sec.id !== 'material') folder.close();
     }
 
-    // Debug folder — outside PARAM_SCHEMA: never randomized, never pasted.
+    // Debug telemetry is never randomized. The visual showContact flag is part
+    // of copied/shared configs so a linked experiment reproduces its view.
     const dbg = gui.addFolder('debug');
     dbg.add(CONFIG.debug, 'showContact').name('show contact');
     dbg.add(debugState, 'maxPenetration').name('max face penetration').listen().disable();
     dbg.add(debugState, 'stuckVertices').name('stuck vertices').listen().disable();
     dbg.close();
 
-    gui.add({ 'randomize all': () => randomizeSections(PARAM_SCHEMA) }, 'randomize all');
+    gui.add({ 'randomize all': () => randomizeSections(ACTIVE_PARAM_SCHEMA) }, 'randomize all');
     gui.add({ 'copy config': copyConfig }, 'copy config');
     gui.add({ 'paste config': pasteConfig }, 'paste config');
+    if (IS_MEMBRANE_LAB) gui.add({ 'copy share link': copyShareLink }, 'copy share link');
     gui.add({ restart: restartAll }, 'restart');
+
+    loadSharedConfig();
+
+    if (IS_MEMBRANE_LAB) {
+        gui.domElement.addEventListener('input', () => setConfigStatus('edited config'));
+        gui.domElement.addEventListener('click', (event) => {
+            if (event.target.closest('.rand-lock')) setConfigStatus('edited config');
+        });
+    }
 
     window.addEventListener('keydown', (e) => {
         if (e.key === 'h' || e.key === 'H') gui.show(gui._hidden);
@@ -2275,7 +2463,8 @@ function restartAll(manual = true) {
     buildMembrane();
     restartCycle();
     disengageIntro();
-    zoomInit();
+    if (IS_MEMBRANE_LAB) resetLabPresentation();
+    else zoomInit();
     // If the manual restartPause is shorter than restPause, pre-advance phaseTime
     // so the next auto-drop fires almost immediately after the click.
     if (manual) {
@@ -2334,6 +2523,36 @@ const zoomCtl = {
     fadeTimer: 0,
     fadeDoneTimer: 0,          // fires at the END of the crossfade — flips the intro button to "replay"
 };
+
+// The lab uses the exact same solver and renderer as the intro, but none of
+// the landing choreography. Reset every presentation-only state explicitly so
+// a config import, resize or manual restart can never leave a view offset,
+// hidden canvas, parking timer or intro UI class behind.
+function resetLabPresentation() {
+    clearTimeout(zoomCtl.fadeTimer);
+    clearTimeout(zoomCtl.fadeDoneTimer);
+    disarmFadeAttr();
+    cancelFinalTimeBrake();
+    disengageIntro();
+    resetOscillationPhase();
+    accumulator = 0;
+    zoomCtl.phase = 'idle';
+    zoomCtl.Z = 1;
+    zoomCtl.Z0 = 1;
+    zoomCtl.lnZ = 0;
+    zoomCtl.lnZ0 = 0;
+    zoomCtl.spawnH = 0;
+    zoomCtl.parkingT0 = -1;
+    zoomCtl.lnZPark = -1;
+    zoomCtl.tGlobal = 0;
+    camera.clearViewOffset();
+    applyCamera();
+    const canvas = renderer.domElement;
+    canvas.style.transition = 'none';
+    canvas.style.opacity = '1';
+    canvas.style.display = '';
+    document.documentElement.classList.remove('intro-armed', 'intro-playing');
+}
 
 // Project the pinned outer ring of the membrane to canvas CSS pixels.
 // useHome: project the REST (flat) ring positions instead of the current ones —
@@ -2609,7 +2828,8 @@ function markIntroPlayed() {
 let introUiState = 'playing';
 
 function replayBtnEl() {
-    return document.body.hasAttribute('data-intro-dev') ? null : document.getElementById('replay-btn');
+    return (IS_MEMBRANE_LAB || document.body.hasAttribute('data-intro-dev'))
+        ? null : document.getElementById('replay-btn');
 }
 
 function setIntroUiState(state) {
@@ -2636,7 +2856,7 @@ function setPhaseLockedFadeProgress(progress) {
     const p = Math.max(0, Math.min(1, progress));
     const canvas = renderer.domElement;
     const block = document.querySelector('.center-block');
-    // Lab fade is sampled from the same clamped RAF clock as physics. Keeping
+    // The phase-locked fade is sampled from the same clamped RAF clock as physics. Keeping
     // CSS transitions out of this path prevents background throttling from
     // letting opacity finish while simulation time is paused.
     canvas.style.transition = 'none';
@@ -2677,8 +2897,8 @@ function scheduleCrossfade() {
         setIntroUiState('done');
         return;
     }
-    // Production keeps its established landing semantics. The lab marks the
-    // intro played only after its phase-locked final cycle actually completes.
+    // The fallback marks landing immediately; phase-lock marks the intro played
+    // only after its synchronized final cycle actually completes.
     if (!CONFIG.intro.timeBrake) markIntroPlayed();
     const canvas = renderer.domElement;
     const block = document.querySelector('.center-block');
@@ -2714,8 +2934,8 @@ function scheduleCrossfade() {
         // fixed-step budget at u=1. Hidden tabs still hit this offscreen
         // failsafe shortly afterwards without accumulating catch-up work.
         }, dur * 1000);
-        // Legacy production finish, retained until the lab version is
-        // explicitly rolled out on the root page.
+        // Attractor fallback for tuning or browsers/pages that explicitly turn
+        // the phase-locked finish off.
         disarmFadeAttr();
         fadeAttr.armed = true;
         fadeAttr.endAt = performance.now() / 1000 + dur;
@@ -2768,6 +2988,10 @@ function bootIntroDone() {
 
 // (Re)initialize the whole zoom flight. Called on boot and on manual restart.
 function zoomInit() {
+    if (IS_MEMBRANE_LAB) {
+        resetLabPresentation();
+        return;
+    }
     clearTimeout(zoomCtl.fadeTimer);
     clearTimeout(zoomCtl.fadeDoneTimer);
     disarmFadeAttr();
@@ -2780,14 +3004,11 @@ function zoomInit() {
     canvas.style.transition = 'none';
     canvas.style.opacity = '1';
     const block = document.querySelector('.center-block');
-    // When crossfade is off, the DOM layout (logo + text) is visible from the start
-    // so you can tune the camera curve against the final target directly.
-    // ?bare=1 — debug: hide the HTML logo layout entirely so only the WebGL film is visible
-    const q = new URLSearchParams(location.search);
-    const bare = q.has('bare');
-    // ?film=0 — debug: hide the WebGL film entirely so only the DOM art layer is visible
-    canvas.style.display = q.get('film') === '0' ? 'none' : '';
-    if (block) { block.style.transition = 'none'; block.style.opacity = (bare || CONFIG.intro.crossfade) ? '0' : '1'; }
+    canvas.style.display = '';
+    if (block) {
+        block.style.transition = 'none';
+        block.style.opacity = CONFIG.intro.crossfade ? '0' : '1';
+    }
     setIntroUiState('playing'); // the flight is (re)starting → button offers "skip intro"
     applyLayoutLift();
     if (!measureBaseGeometry()) { zoomCtl.phase = 'idle'; return; }
@@ -2835,6 +3056,7 @@ function symmetricEase(x, e) {
 }
 
 function updateZoom(dt) {
+    if (IS_MEMBRANE_LAB) return;
     const zc = zoomCtl, cfg = CONFIG.intro;
     if (zc.phase === 'idle') return;
     zc.tGlobal += dt;
@@ -2891,6 +3113,10 @@ if (document.fonts && document.fonts.ready) {
 
 // On resize: same rule — refresh geometry but do not snap Z.
 window.addEventListener('resize', () => {
+    if (IS_MEMBRANE_LAB) {
+        camera.clearViewOffset();
+        return;
+    }
     if (zoomCtl.phase === 'idle') { applyZoom(); return; }
     if (!measureBaseGeometry()) return;
     if (zoomCtl.phase === 'landed') { zoomCtl.lnZ = 0; zoomCtl.Z = 1; }
@@ -2903,7 +3129,8 @@ window.addEventListener('resize', () => {
 // ----------------------------------------------------------------------------
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
+    if (IS_MEMBRANE_LAB) applyCamera();
+    else camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
@@ -2912,9 +3139,10 @@ applyTilt();
 applyBallLook();
 buildMembrane();
 restartCycle();
-const gui = buildGUI();
-// Dev overlay: always on, fixed — out of the layout flow, doesn't affect body sizing.
-try {
+// Production does not construct the GUI at all; the lab owns the constructor.
+const gui = SHOULD_BUILD_GUI ? buildGUI() : null;
+// Dev overlay: fixed, outside layout flow, so it never changes world sizing.
+if (gui) try {
     const g = gui.domElement;
     g.style.position = 'fixed';
     g.style.top = '0';
@@ -2924,18 +3152,14 @@ try {
     g.style.overflowY = 'auto';
     g.style.pointerEvents = 'auto';
     gui.close(); // collapsed by default — one click opens; never covers the tagline (esp. portrait)
-    // GUI visibility: dedicated dev pages (body[data-intro-dev]) and synced
-    // lab previews (body[data-intro-gui]) show it by default; production pages
-    // hide it. ?gui=1 forces it on anywhere, ?gui=0 — off.
-    const guiQ = new URLSearchParams(location.search).get('gui');
-    const guiDefaultOn = document.body.hasAttribute('data-intro-dev') || document.body.hasAttribute('data-intro-gui');
-    if (guiQ === '0' || (!guiDefaultOn && guiQ !== '1')) g.style.display = 'none';
 } catch (_) { /* noop */ }
 // Returning visitor on the production page: the intro has already played for
 // this INTRO_VERSION → boot straight into the done state (the head script in
 // index.html also skipped arming the intro, so the layout was never hidden).
 // Dev pages always play — tuning must not depend on a browser flag.
-if (introAlreadyPlayed() && !document.body.hasAttribute('data-intro-dev')) {
+if (IS_MEMBRANE_LAB) {
+    resetLabPresentation();
+} else if (introAlreadyPlayed() && !document.body.hasAttribute('data-intro-dev')) {
     bootIntroDone();
 } else {
     zoomInit(); // arms the zoom flight (measures geometry, computes the spawn height)
@@ -2982,8 +3206,7 @@ function snapToFunnel() {
     introState.startTime = (performance.now() / 1000) - (CONFIG.intro.attractorRamp + 0.5);
 }
 try {
-    const q = new URLSearchParams(location.search);
-    if (q.get('frozen') === '1') {
+    if (IS_MEMBRANE_LAB && new URLSearchParams(location.search).get('frozen') === '1') {
         // Wait one frame so buildMembrane has definitely populated buffers.
         requestAnimationFrame(() => requestAnimationFrame(snapToFunnel));
     }
