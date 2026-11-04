@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Autopost privacy policy — dipnaked</title>
+  <meta name="description" content="How the personal Autopost integration uses Google and YouTube data, local media, authorization tokens and cloud content generation.">
+  <link rel="canonical" href="https://dipnaked.com/integrations/autopost/privacy/">
+  <link rel="stylesheet" href="/integrations/autopost/style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-header">
+      <a class="brand" href="/">dipnaked</a>
+      <nav aria-label="Autopost"><a href="/integrations/autopost/">Autopost</a><a href="/integrations/autopost/privacy/" aria-current="page">Privacy</a><a href="/integrations/autopost/#terms">Terms</a></nav>
+    </header>
+    <main id="main">
+      <p class="eyebrow">Autopost / privacy</p>
+      <h1>Privacy policy</h1>
+      <p class="meta">Last updated: <time datetime="2026-11-04">4 November 2026</time></p>
+      <p class="lead">Autopost is a personal publishing tool operated by dipnaked. This policy describes the information it uses to prepare and publish the operator’s media.</p>
+      <p>The tool runs on the operator’s computer. This website provides information about it and does not provide a public account-registration service.</p>
+      <section aria-labelledby="information">
+        <h2 id="information">Information used</h2>
+        <ul>
+          <li><strong>Google authorization:</strong> OAuth access and refresh tokens, used to access the explicitly authorized YouTube channel. Google handles sign-in; Autopost does not receive the Google account password.</li>
+          <li><strong>YouTube information:</strong> channel identifiers and names; video identifiers, titles, descriptions, tags, visibility, processing status and scheduled publication times. Autopost uses YouTube API Services to obtain or update this information.</li>
+          <li><strong>Selected local media:</strong> source photos and videos, extracted audio, transcripts, reference frames, generated text and thumbnails, and prepared upload files.</li>
+          <li><strong>Operational records:</strong> file hashes and paths, publication history, resumable-upload state, timestamps and diagnostic logs used to resume work and investigate failures.</li>
+        </ul>
+      </section>
+      <section aria-labelledby="purpose">
+        <h2 id="purpose">Why this information is used</h2>
+        <p>Autopost uses the information to verify the connected channel, prepare publishing assets, upload the selected media, set metadata and publication times, and check results. It keeps local state to avoid duplicate uploads and to continue interrupted jobs.</p>
+        <p>Access to a connected channel is used for this publishing workflow. The application does not sell Google user data, use it for advertising, or use it to train general-purpose AI models.</p>
+      </section>
+      <section aria-labelledby="services">
+        <h2 id="services">Services receiving information</h2>
+        <p><strong>Google and YouTube.</strong> YouTube receives the video file, thumbnail, metadata and publishing instructions submitted by the operator. Google processes authorization and API requests. Their handling of information is described in the <a href="https://policies.google.com/privacy">Google Privacy Policy</a>; the <a href="https://www.youtube.com/t/terms">YouTube Terms of Service</a> also apply.</p>
+        <p><strong>OpenAI.</strong> To generate a title, description, tags and thumbnail, Autopost sends the selected local video’s filename, transcript text, reference frames and content instructions to OpenAI through the operator’s signed-in account. The preparation workflow does not include Google OAuth tokens or YouTube API account records in those prompts. OpenAI processes submitted content according to the operator’s account settings and the <a href="https://openai.com/policies/privacy-policy/">OpenAI Privacy Policy</a>.</p>
+        <p><strong>Local processing.</strong> Transcription and media conversion run on the operator’s computer. Instagram publication uses the operator’s browser session and sends the prepared post to Instagram.</p>
+        <p>Autopost’s use of information received from Google APIs follows the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including its Limited Use requirements.</p>
+      </section>
+      <section aria-labelledby="storage">
+        <h2 id="storage">Storage and retention</h2>
+        <p>Authorization credentials, publication records, local media, generated assets and logs are stored on the computer running Autopost. They are not hosted on these public information pages. Access to those local files is controlled by the operator and the computer’s account permissions.</p>
+        <p>Records are retained for the connected publishing workflow, including recovery from interrupted uploads and tracking scheduled releases. Local data is removed by the operator when it is no longer needed; there is no automatic expiry of local media or job history. Backups, if made by the operator, must also be considered when deleting data.</p>
+        <p>Uploaded videos remain on YouTube until the channel owner removes them there. Removing local files or disconnecting Autopost does not delete uploaded or scheduled YouTube videos.</p>
+      </section>
+      <section aria-labelledby="control">
+        <h2 id="control">Revoke access or delete data</h2>
+        <p>You can revoke Autopost’s access at any time from <a href="https://security.google.com/settings/security/permissions">Google’s third-party access settings</a>. This stops further authorized access; it does not automatically erase existing local copies.</p>
+        <p>To disconnect fully, stop scheduled Autopost runs, revoke access in Google, and remove the local credentials and application data you no longer need. Local publication history is used to prevent duplicate uploads, so do not restart a cleared installation without reviewing the channel first.</p>
+        <p>For help accessing or deleting information held by the operator, contact <a class="contact" href="mailto:debility.records@gmail.com">debility.records@gmail.com</a>. Videos and their visibility can be managed directly in <a href="https://studio.youtube.com/">YouTube Studio</a>.</p>
+      </section>
+      <section aria-labelledby="website">
+        <h2 id="website">This information website</h2>
+        <p>These Autopost pages do not add analytics, advertising, forms, tracking cookies or embedded videos. The hosting provider may process ordinary request information, such as an IP address and browser details, to deliver and protect the website. Following an external link brings you to a service with its own privacy practices.</p>
+      </section>
+      <section aria-labelledby="changes">
+        <h2 id="changes">Updates and contact</h2>
+        <p>This policy will be updated when Autopost’s data practices change. The date above identifies the current revision.</p>
+        <p>Operator: dipnaked<br>Privacy and support: <a class="contact" href="mailto:debility.records@gmail.com">debility.records@gmail.com</a></p>
+      </section>
+    </main>
+    <footer class="site-footer"><a href="/integrations/autopost/">About Autopost</a><a href="/integrations/autopost/#terms">Terms of use</a><a href="mailto:debility.records@gmail.com">Contact</a></footer>
+  </div>
+</body>
+</html>

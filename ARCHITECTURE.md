@@ -88,3 +88,17 @@ head script in `index.html` sees the matching version and does not arm the
 intro — the page renders plain immediately and membrane.js boots straight
 into `done`. Bump `INTRO_VERSION` (in **both** `membrane.js` and the
 `index.html` head script) to re-show the intro to everyone.
+
+## Autopost integration pages
+
+- `integrations/autopost/index.html` describes the personal publishing tool,
+  YouTube access, support contact and terms of use (`#terms`).
+- `integrations/autopost/privacy/index.html` describes local storage, Google and
+  YouTube API data, OpenAI content generation, and revocation/deletion options.
+- `integrations/autopost/style.css` provides isolated, responsive document styles.
+
+These static pages are served by the existing GitHub Pages workflow and use the
+same `dipnaked.com` custom domain. They need no JavaScript, build step or additional
+hosting. Google OAuth Branding uses `/integrations/autopost/` as the application
+home page and `/integrations/autopost/privacy/` as the privacy policy URL. Keep the
+public text in sync with the Autopost application's data practices.
