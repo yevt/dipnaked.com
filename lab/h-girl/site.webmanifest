@@ -1,0 +1,17 @@
+{
+  "id": "./",
+  "name": "h-GIRL",
+  "short_name": "h-GIRL",
+  "lang": "ru",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    { "src": "icons/h-192.png?v=7x7-lower", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/h-512.png?v=7x7-lower", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/h-maskable-512.png?v=7x7-lower", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/h-maskable-1024.png?v=7x7-lower", "sizes": "1024x1024", "type": "image/png", "purpose": "maskable" }
+  ]
+}

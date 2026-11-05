@@ -1,0 +1,8 @@
+Kenney — UI Audio (CC0)
+https://kenney.nl/assets/ui-audio
+switch.wav uses switch2.ogg for both light transitions.
+
+The switch recording is mono PCM WAV, with softer treble and lower volume for the gallery.
+
+gallery-room.wav is the original stereo impulse response for the 40 × 86 × 9.25 m
+gallery. Each light switch plays both the direct click and the room reflections.

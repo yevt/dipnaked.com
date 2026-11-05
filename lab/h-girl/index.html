@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="Одна картина, один источник света. Интерактивный этюд H-GIRL — исследуйте форму, тени и расстояние." />
+    <link rel="icon" type="image/x-icon" sizes="16x16 24x24 32x32 48x48 256x256" href="./favicon.ico?v=7x7-lower" />
+    <link rel="apple-touch-icon" sizes="152x152" href="./icons/apple-touch-icon-152.png?v=7x7-lower" />
+    <link rel="apple-touch-icon" sizes="167x167" href="./icons/apple-touch-icon-167.png?v=7x7-lower" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=7x7-lower" />
+    <link rel="manifest" href="./site.webmanifest" />
+    <link rel="preload" href="./fonts/manrope.ttf" as="font" type="font/ttf" crossorigin />
+    <link rel="preload" href="./fonts/noto-sans-mono.ttf" as="font" type="font/ttf" crossorigin />
+    <title>h-GIRL — вперед к свету.</title>
+    <style>@font-face{font-family:Noto Sans Mono;src:url(fonts/noto-sans-mono.ttf)format("truetype");font-weight:100 900;font-display:swap}html,body{background:#000;width:100%;height:100%;margin:0;overflow:hidden}body:not([data-loading]){background:#101010}[hidden]{display:none!important}body[data-loading] #app{visibility:hidden}.loading{z-index:10;color:#fff;box-sizing:border-box;background:#000;flex-direction:column;justify-content:center;align-items:center;gap:30px;padding:24px;display:flex;position:fixed;inset:0}.loading-brand{filter:invert();width:144px;height:auto;display:block}.loading p{letter-spacing:calc(16px - 1ch);text-align:center;margin:10px 0 0;padding-left:calc(16px - 1ch);font:300 13px/32px Noto Sans Mono,monospace}.loading-bar{background:#262626;width:144px;height:2px}.loading-fill{transform-origin:0;background:#fff;width:100%;height:100%;transition:transform .16s linear;display:block;transform:scaleX(0)}@media (prefers-reduced-motion:reduce){.loading-fill{transition:none}}</style>
+    <script type="module" crossorigin src="./assets/index-CB8QPXYo.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/preload-helper-CRzLMJPS.js">
+  </head>
+  <body data-loading>
+    <div id="app" inert>
+    <canvas id="scene" aria-label="Трёхмерная галерея со схемой standing 3/4" tabindex="0"></canvas>
+    <div class="vignette" aria-hidden="true"></div>
+
+    <header class="hud-top">
+      <div class="identity"><img class="brand-logo wordmark" src="./logo.svg" alt="h-girl" width="792" height="144" /><span class="divider"></span><span class="edition">появление на свет</span></div>
+      <div class="actions">
+        <button class="icon-button" id="reset" title="Вернуть начальный вид" aria-label="Вернуть начальный вид">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 10a8 8 0 1 1 1.4 7M4 4v6h6"/></svg>
+        </button>
+        <button class="icon-button" id="settings-button" aria-label="Настройки" aria-expanded="false" aria-controls="settings">
+          <svg class="settings-symbol" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="#1b1b1b"/><circle cx="15" cy="17" r="3" fill="#1b1b1b"/></svg>
+          <svg class="settings-close-symbol" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
+        <button id="help-button" class="icon-button" aria-label="Справка" aria-controls="intro" hidden>
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M9 8a3 3 0 0 1 6 0c0 2-3 2-3 5"/><circle cx="12" cy="18" r="1" fill="currentColor" stroke="none"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <section class="intro" id="intro" aria-label="Справка" data-phase="hidden" hidden>
+      <svg id="help-art" viewBox="0 0 304 208" aria-hidden="true"></svg>
+      <p class="sr-only" id="input-hint">wasd — движение; мышь — обзор</p>
+      <button class="enter-button" id="enter" aria-label="начать" disabled></button>
+    </section>
+
+    <footer class="hud-bottom">
+      <span class="performance"><span id="fps">—</span> <span>FPS</span></span>
+      <span id="escape-hint" class="escape-hint" hidden>esc — освободить мышь / справка</span>
+    </footer>
+    <div class="crosshair" id="crosshair" hidden aria-hidden="true"></div>
+
+    <div id="joystick" class="joystick" aria-label="Стик движения" role="application" hidden>
+      <span class="joystick-axis axis-x"></span><span class="joystick-axis axis-y"></span><span class="joystick-knob" id="joystick-knob"></span>
+    </div>
+
+    <aside id="settings" class="settings" hidden aria-label="Настройки">
+      <label for="quality">Качество изображения</label>
+      <select id="quality"><option value="low">Экономия</option><option value="medium" selected>Среднее</option><option value="high">Высокое</option></select>
+      <label for="brightness">Яркость света <output id="brightness-value">100%</output></label>
+      <input id="brightness" type="range" min="30" max="200" value="100" step="5" />
+    </aside>
+    </div>
+    <div id="loading" class="loading">
+      <img class="loading-brand" src="./logo.svg" alt="h-girl" width="792" height="144" />
+      <div id="loading-progress" class="loading-bar" role="progressbar" aria-label="Подготовка пространства" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="loading-fill" class="loading-fill"></span></div>
+      <p id="loading-text">подготовка<br />пространства</p>
+    </div>
+  </body>
+</html>
