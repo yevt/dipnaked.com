@@ -1,0 +1,28 @@
+.circle-motion .study-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.motion-stage { position: relative; overflow: hidden; }
+.motion-stage > svg { pointer-events: none; }
+.motion-panel {
+  position: absolute; left: 8.3333333%; top: 19.047619%; width: 83.3333333%; height: 66.6666667%;
+  transform-origin: 50% 100%;
+}
+.motion-panel > svg { display: block; width: 100%; height: auto; pointer-events: none; }
+#motion-puzzle .motion-panel > svg,
+#motion-puzzle-reverse .motion-panel > svg { overflow: visible; }
+#motion-puzzle,
+#motion-button-entry,
+#study-uppercase { grid-column: 1; }
+.motion-hit {
+  position: absolute;
+  left: 12.5%; top: 60.7142857%; width: 80%; height: 28.5714286%;
+  padding: 0; border: 0; background: transparent; touch-action: manipulation;
+}
+.motion-hit:disabled { cursor: default; }
+.motion-hit:focus-visible { outline-color: #eee; outline-offset: 4px; }
+.motion-reset { padding: 8px 14px; border: 1px solid #535353; color: #eee; background: #1b1b1b; font-size: 13px; }
+.motion-stats { min-height: 36px; margin: 0; padding-top: 12px; font-size: 11px; line-height: 1.6; color: #999; }
+.circle-motion .study-card { display: flex; flex-direction: column; }
+.circle-motion .study-grid { align-items: start; }
+.circle-motion .study-caption { min-height: 104px; }
+.flight-tools { display: flex; align-items: center; gap: 12px; margin-top: 10px; font-size: 11px; color: #999; }
+@media (max-width: 1100px) { .circle-motion .study-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 900px) { .circle-motion .study-grid { grid-template-columns: minmax(0, 1fr); } }

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#131313">
+  <title>H-GIRL — Этюды</title>
+  <link rel="icon" href="./assets/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="./assets/study.css">
+  <link rel="stylesheet" href="./assets/perimeter.css">
+  <link rel="stylesheet" href="./assets/type.css">
+  <link rel="stylesheet" href="./assets/motion.css">
+  <link rel="stylesheet" href="./assets/catalogue.css">
+</head>
+<body class="circle-studies">
+  <main class="study-page">
+    <header class="catalogue-header">
+      <div class="catalogue-title"><img src="./assets/logo.svg" width="792" height="144" alt="h-girl"><h1>Этюды</h1></div>
+      <a href="../">К галерее <span aria-hidden="true">↗</span></a>
+    </header>
+    <nav class="catalogue-nav" aria-label="Разделы">
+      <a href="#menus">Первые меню</a><a href="#circles">Круги</a><a href="#edges">Периметр</a>
+      <a href="#letters">Шрифт и стрелка</a><a href="#motion">Движение</a>
+      <a href="#loading">Загрузка</a><a href="#icon">Значок</a>
+    </nav>
+
+    <div class="study-tools">
+      <label for="button-state">Надпись на кнопке
+        <select id="button-state"><option value="start">Начать</option><option value="continue">Продолжить</option></select>
+      </label>
+      <label for="study-background">Фон за справкой
+        <select id="study-background"><option value="dark">Тёмный</option><option value="light">Светлее</option></select>
+      </label>
+    </div>
+
+    <section class="chapter" id="menus">
+      <h2>Первые меню</h2>
+      <div class="study-grid">
+        <figure class="sample"><figcaption>Приглашение</figcaption>
+          <div class="study-stage early-stage">
+            <div class="early-intro invitation">
+              <p class="early-eyebrow">ПРОСТРАНСТВО ДЛЯ ОДНОЙ КАРТИНЫ</p>
+              <p class="early-title">Посмотри ближе.</p>
+              <p class="early-copy">Пройдись вокруг картины.<br>Свет откликнется на твоё приближение.</p>
+              <span class="early-action"><span data-start="Войти в пространство">Войти в пространство</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></span>
+              <p class="early-controls">W A S D — движение · мышь — обзор</p>
+            </div>
+          </div>
+        </figure>
+        <figure class="sample"><figcaption>Подсказка</figcaption>
+          <div class="study-stage early-stage">
+            <div class="early-intro hint-panel">
+              <p>Escape — показать справку<br>W, A, S, D — движение<br>Мышь — обзор</p>
+              <span class="early-action"><span data-start="Начать прогулку">Начать прогулку</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></span>
+            </div>
+          </div>
+        </figure>
+      </div>
+    </section>
+
+    <section class="chapter" id="circles">
+      <h2>Круги</h2>
+      <details class="study-reference">
+        <summary>Сетка из скетча 05</summary>
+        <div class="study-reference-content">
+          <img src="./assets/schema-05.png" width="2800" height="2800" alt="H-GIRL, скетч 05" loading="lazy">
+          <p>Диаметры кругов относятся как 1 : 4. Край большого круга проходит через центр малого: сетки смещены на половину малой ячейки.</p>
+        </div>
+      </details>
+      <div class="study-grid" id="forms-grid"></div>
+    </section>
+
+    <section class="chapter perimeter-studies" id="edges">
+      <h2>Периметр</h2>
+      <div class="study-grid" id="perimeter-grid"></div>
+    </section>
+
+    <section class="chapter type-studies" id="letters">
+      <h2>Шрифт и стрелка</h2>
+      <div class="study-grid" id="type-grid"></div>
+    </section>
+
+    <section class="chapter circle-motion" id="motion">
+      <h2>Движение</h2>
+      <div class="study-tools">
+        <label for="contact-input">Ввод
+          <select id="contact-input"><option value="mouse">Движение мыши</option><option value="tap">Тап</option></select>
+        </label>
+        <button class="motion-reset" id="motion-reset" type="button">Сбросить вращение</button>
+      </div>
+      <div class="study-grid" id="motion-grid"></div>
+    </section>
+
+    <section class="chapter" id="loading">
+      <h2>Загрузка</h2>
+      <div class="study-grid loader-grid">
+        <figure class="sample"><figcaption>Бегущая полоса · надпись</figcaption>
+          <div class="loader-sample early-loader"><span class="early-brand">h–girl</span><span class="running-bar"></span><p>Подготавливаем пространство</p></div>
+        </figure>
+        <figure class="sample"><figcaption>Бегущая полоса · логотип</figcaption>
+          <div class="loader-sample early-loader"><img src="./assets/logo.svg" width="144" height="26" alt="h-girl"><span class="running-bar"></span><p>Подготавливаем пространство</p></div>
+        </figure>
+      </div>
+      <label class="progress-control" for="loading-progress">Заполнение полосы
+        <input id="loading-progress" type="range" min="0" max="100" value="60">
+        <output id="loading-percent" for="loading-progress">60%</output>
+      </label>
+      <div class="study-grid loader-grid">
+        <figure class="sample"><figcaption>Белое на чёрном</figcaption>
+          <div class="loader-sample measured dark"><img src="./assets/logo.svg" width="144" height="26" alt="h-girl"><span class="measured-bar"><i></i></span><p>подготовка<br>пространства</p></div>
+        </figure>
+        <figure class="sample"><figcaption>Чёрное на белом</figcaption>
+          <div class="loader-sample measured light"><img src="./assets/logo.svg" width="144" height="26" alt="h-girl"><span class="measured-bar"><i></i></span><p>подготовка<br>пространства</p></div>
+        </figure>
+      </div>
+    </section>
+
+    <section class="chapter" id="icon">
+      <h2>Значок</h2>
+      <figure class="icon-sheet"><img src="./assets/icon-positions.png" width="536" height="318" loading="lazy"
+        alt="Два положения h в квадрате 7 × 7. А — один круг снизу, Б — один круг сверху. Под каждым значки вкладки в 16 и 32 пикселя."></figure>
+      <p class="icon-files"><a href="./assets/favicon.ico">Вариант А · ICO</a><a href="./assets/upper.ico">Вариант Б · ICO</a></p>
+    </section>
+  </main>
+  <script type="module" src="./assets/catalogue.js"></script>
+  <script type="module" src="./assets/forms.js"></script>
+  <script type="module" src="./assets/perimeter.js"></script>
+  <script type="module" src="./assets/type.js"></script>
+  <script type="module" src="./assets/motion.js"></script>
+</body>
+</html>

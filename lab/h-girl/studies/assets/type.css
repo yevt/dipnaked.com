@@ -1,0 +1,19 @@
+@font-face {
+  font-family: 'Noto Sans Mono';
+  src: url('./noto-sans-mono.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+.type-studies .study-grid {
+  grid-template-columns: minmax(0, 480px);
+  justify-content: center;
+}
+
+.type-studies .mono-letter {
+  font-family: 'Noto Sans Mono', monospace;
+  text-anchor: middle;
+  dominant-baseline: alphabetic;
+}
+
