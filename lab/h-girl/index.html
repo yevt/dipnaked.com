@@ -10,39 +10,12 @@
     <link rel="apple-touch-icon" sizes="167x167" href="./icons/apple-touch-icon-167.png?v=7x7-lower" />
     <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=7x7-lower" />
     <link rel="manifest" href="./site.webmanifest" />
-    <link rel="preload" href="./fonts/manrope.ttf" as="font" type="font/ttf" crossorigin />
-    <link rel="preload" href="./fonts/noto-sans-mono.ttf" as="font" type="font/ttf" crossorigin />
+    <link rel="preload" href="./fonts/manrope.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="./fonts/noto-sans-mono.woff2" as="font" type="font/woff2" crossorigin />
     <title>h-GIRL — вперед к свету.</title>
-    <style>
-      @font-face {
-        font-family: 'Noto Sans Mono';
-        src: url('./fonts/noto-sans-mono.ttf') format('truetype');
-        font-weight: 100 900;
-        font-display: swap;
-      }
-      html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #fff; }
-      body:not([data-loading]) { background: #101010; }
-      [hidden] { display: none !important; }
-      body[data-loading] #app { visibility: hidden; }
-      .loading {
-        position: fixed; inset: 0; z-index: 10; box-sizing: border-box;
-        display: flex; flex-direction: column; justify-content: center; align-items: center;
-        gap: 30px; padding: 24px; background: #fff; color: #000;
-      }
-      .loading-brand { width: 144px; height: auto; display: block; }
-      .loading p {
-        margin: 10px 0 0; padding-left: calc(16px - 1ch); text-align: center;
-        font: 300 13px/32px 'Noto Sans Mono', monospace; letter-spacing: calc(16px - 1ch);
-      }
-      .loading-bar { width: 144px; height: 2px; background: #ddd; }
-      .loading-fill {
-        display: block; width: 100%; height: 100%; background: #000;
-        transform: scaleX(0); transform-origin: left; transition: transform .16s linear;
-      }
-      @media (prefers-reduced-motion: reduce) { .loading-fill { transition: none; } }
-    </style>
-    <script type="module" crossorigin src="./assets/index-CB8QPXYo.js"></script>
-    <link rel="modulepreload" crossorigin href="./assets/preload-helper-CRzLMJPS.js">
+    <style>@font-face{font-family:Noto Sans Mono;src:url(fonts/noto-sans-mono.woff2)format("woff2");font-weight:100 900;font-display:swap}html,body{background:#fff;width:100%;height:100%;margin:0;overflow:hidden}body:not([data-loading]){background:#101010}[hidden]{display:none!important}body[data-loading] #app{visibility:hidden}.loading{z-index:10;box-sizing:border-box;color:#000;background:#fff;flex-direction:column;justify-content:center;align-items:center;gap:30px;padding:24px;display:flex;position:fixed;inset:0}.loading-brand{width:144px;height:auto;display:block}.loading p{text-align:center;letter-spacing:calc(16px - 1ch);margin:10px 0 0;padding-left:calc(16px - 1ch);font:300 13px/32px Noto Sans Mono,monospace}.loading-bar{background:#ddd;width:144px;height:2px}.loading-fill{transform-origin:0;background:#000;width:100%;height:100%;transition:transform .16s linear;display:block;transform:scaleX(0)}@media (prefers-reduced-motion:reduce){.loading-fill{transition:none}}</style>
+    <script type="module" crossorigin src="./assets/index-BL8GG80S.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-CFkId4TF.css">
   </head>
   <body data-loading>
     <div id="app" inert>
@@ -66,7 +39,7 @@
     </header>
 
     <section class="intro" id="intro" aria-label="Справка" data-phase="hidden" hidden>
-      <svg id="help-art" viewBox="0 0 304 208" aria-hidden="true"></svg>
+      <canvas id="help-art" width="304" height="192" aria-hidden="true"></canvas>
       <p class="sr-only" id="input-hint">wasd — движение; мышь — обзор</p>
       <button class="enter-button" id="enter" aria-label="начать" disabled></button>
     </section>
@@ -92,6 +65,6 @@
       <img class="loading-brand" src="./logo.svg" alt="h-girl" width="792" height="144" />
       <div id="loading-progress" class="loading-bar" role="progressbar" aria-label="Подготовка пространства" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="loading-fill" class="loading-fill"></span></div>
       <p id="loading-text">подготовка<br />пространства</p>
-    </div>
+    </div>
   </body>
 </html>

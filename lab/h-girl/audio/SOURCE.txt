@@ -4,5 +4,16 @@ switch.wav uses switch2.ogg for both light transitions.
 
 The switch recording is mono PCM WAV, with softer treble and lower volume for the gallery.
 
-gallery-room.wav is the original stereo impulse response for the 40 × 86 × 9.25 m
-gallery. Each light switch plays both the direct click and the room reflections.
+gallery-room.wav is an original stereo impulse response for the 8 × 26 × 5 m
+gallery (width × length × height). scripts/render-room.mjs places early
+reflections using the room dimensions and adds a diffuse 1.45 s midband decay.
+The light switches, disk impacts and piano share this one room.
+
+piano.mp3 is a 40-second original stereo piano sketch for the musical relief.
+The soft notes use the Upright Piano KW recordings by Gonzalo and Roberto,
+released under CC0 by FreePats. Recorded on a Kawai upright in stereo.
+https://freepats.zenvoid.org/Piano/acoustic-grand-piano.html#UprightKW
+
+disk-heavy.wav and disk-light.wav are original dry impact sounds for the two
+disk sizes. Their short damped resonances are rendered in mono. Floor impacts,
+disk collisions and the piano all use the same gallery-room.wav response.
