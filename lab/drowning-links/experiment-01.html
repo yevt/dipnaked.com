@@ -1,0 +1,597 @@
+﻿<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Drowning Links Experiment 01</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #eaf3ff;
+      --muted: #8da4bc;
+      --water: rgba(34, 129, 170, 0.42);
+      --water-deep: rgba(8, 39, 58, 0.82);
+      --foam: rgba(231, 250, 255, 0.92);
+      --sand: #8d6b45;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 22% 18%, rgba(122, 166, 194, 0.15), transparent 26rem),
+        linear-gradient(180deg, #111820 0%, #0e1720 46%, #082135 46%, #04141e 100%);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .stage {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      isolation: isolate;
+      overflow: hidden;
+    }
+
+    .horizon {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+      background:
+        linear-gradient(180deg, transparent 0 45%, rgba(87, 156, 184, 0.08) 45%, transparent 56%),
+        linear-gradient(180deg, transparent 0 82%, rgba(141, 107, 69, 0.35) 82% 100%);
+    }
+
+    .bottom {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 18vh;
+      z-index: 2;
+      pointer-events: none;
+      background:
+        linear-gradient(180deg, transparent 0%, rgba(45, 35, 25, 0.26) 14%, rgba(64, 49, 33, 0.72) 100%),
+        repeating-linear-gradient(101deg, rgba(255, 222, 160, 0.05) 0 2px, transparent 2px 13px);
+    }
+
+    canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    #water {
+      z-index: 6;
+      mix-blend-mode: screen;
+    }
+
+    #splash {
+      z-index: 8;
+    }
+
+    .links {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+    }
+
+    .drowning-link {
+      position: absolute;
+      left: 0;
+      top: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 7.5rem;
+      height: 2.65rem;
+      padding: 0 1.15rem;
+      border: 1px solid rgba(225, 241, 255, 0.48);
+      border-radius: 0.4rem;
+      color: var(--ink);
+      text-decoration: none;
+      font-size: clamp(1rem, 1.2vw + 0.7rem, 1.75rem);
+      font-weight: 720;
+      letter-spacing: 0;
+      line-height: 1;
+      text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25), 0 0 1rem rgba(138, 219, 255, 0.2);
+      background: rgba(7, 15, 22, 0.28);
+      box-shadow: 0 0.65rem 2.1rem rgba(0, 0, 0, 0.2);
+      transform-origin: center;
+      will-change: transform, filter, opacity;
+      user-select: none;
+      touch-action: manipulation;
+    }
+
+    .drowning-link:focus-visible {
+      outline: 2px solid #f4f8ff;
+      outline-offset: 0.35rem;
+    }
+
+    .drowning-link[data-underwater="true"] {
+      color: rgba(208, 236, 255, 0.78);
+      border-color: rgba(169, 224, 255, 0.26);
+      filter: blur(0.25px) contrast(0.9) saturate(0.82);
+      text-shadow: 0 0 0.55rem rgba(97, 205, 255, 0.45);
+      background: rgba(19, 75, 101, 0.2);
+    }
+
+    .caption {
+      position: absolute;
+      left: clamp(1rem, 3vw, 3rem);
+      top: clamp(1rem, 3vw, 2.5rem);
+      z-index: 10;
+      width: min(24rem, calc(100vw - 2rem));
+      color: rgba(234, 243, 255, 0.86);
+      pointer-events: none;
+    }
+
+    .caption h1 {
+      margin: 0 0 0.5rem;
+      font-size: clamp(1.35rem, 2.3vw, 2.9rem);
+      line-height: 0.96;
+      letter-spacing: 0;
+    }
+
+    .caption p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.45;
+    }
+
+    .controls {
+      position: absolute;
+      right: clamp(1rem, 3vw, 2.5rem);
+      top: clamp(1rem, 3vw, 2.5rem);
+      z-index: 10;
+      display: flex;
+      gap: 0.6rem;
+    }
+
+    button {
+      height: 2.35rem;
+      padding: 0 0.9rem;
+      border: 1px solid rgba(231, 250, 255, 0.26);
+      border-radius: 0.35rem;
+      color: #eef9ff;
+      background: rgba(10, 20, 29, 0.66);
+      font: inherit;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: rgba(21, 45, 61, 0.86);
+    }
+
+    button:focus-visible {
+      outline: 2px solid #f4f8ff;
+      outline-offset: 0.2rem;
+    }
+
+    @media (max-width: 680px) {
+      .caption {
+        width: min(19rem, calc(100vw - 2rem));
+      }
+
+      .caption p {
+        display: none;
+      }
+
+      .controls {
+        top: auto;
+        bottom: 1rem;
+      }
+
+      .drowning-link {
+        min-width: 6.5rem;
+        height: 2.4rem;
+        padding: 0 0.85rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="stage" aria-label="Р­РєСЃРїРµСЂРёРјРµРЅС‚ СЃ С‚РѕРЅСѓС‰РёРјРё СЃСЃС‹Р»РєР°РјРё">
+    <section class="caption" aria-hidden="true">
+      <h1>Drowning Links</h1>
+      <p>РџРµСЂРІС‹Р№ РЅР°Р±СЂРѕСЃРѕРє: РЅР°СЃС‚РѕСЏС‰РёРµ HTML-СЃСЃС‹Р»РєРё РїР°РґР°СЋС‚ РІ РЅР°СЂРёСЃРѕРІР°РЅРЅСѓСЋ РІРѕРґСѓ, РїРѕРґРЅРёРјР°СЋС‚ РІРѕР»РЅСѓ Рё РѕСЃС‚Р°СЋС‚СЃСЏ РєР»РёРєР°Р±РµР»СЊРЅС‹РјРё РЅР° РґРЅРµ.</p>
+    </section>
+
+    <div class="controls">
+      <button type="button" id="reset">Restart</button>
+    </div>
+
+    <div class="horizon"></div>
+    <div class="links" id="links"></div>
+    <canvas id="water" aria-hidden="true"></canvas>
+    <canvas id="splash" aria-hidden="true"></canvas>
+    <div class="bottom"></div>
+  </main>
+
+  <script>
+    const linkData = [
+      { label: "archive", href: "#archive", x: 0.18, delay: 0, mass: 1.1 },
+      { label: "notes", href: "#notes", x: 0.35, delay: 650, mass: 0.92 },
+      { label: "objects", href: "#objects", x: 0.52, delay: 1220, mass: 1.24 },
+      { label: "signals", href: "#signals", x: 0.68, delay: 1780, mass: 1.04 },
+      { label: "elsewhere", href: "#elsewhere", x: 0.82, delay: 2360, mass: 1.34 }
+    ];
+
+    const waterCanvas = document.querySelector("#water");
+    const splashCanvas = document.querySelector("#splash");
+    const waterCtx = waterCanvas.getContext("2d");
+    const splashCtx = splashCanvas.getContext("2d");
+    const linksRoot = document.querySelector("#links");
+    const resetButton = document.querySelector("#reset");
+
+    const world = {
+      width: 0,
+      height: 0,
+      dpr: 1,
+      waterLevel: 0,
+      bottom: 0,
+      time: 0,
+      points: [],
+      bodies: [],
+      droplets: []
+    };
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function resizeCanvas(canvas, ctx) {
+      canvas.width = Math.round(world.width * world.dpr);
+      canvas.height = Math.round(world.height * world.dpr);
+      ctx.setTransform(world.dpr, 0, 0, world.dpr, 0, 0);
+    }
+
+    function makePoints() {
+      const count = Math.max(90, Math.round(world.width / 12));
+      world.points = Array.from({ length: count }, (_, index) => ({
+        x: (index / (count - 1)) * world.width,
+        y: 0,
+        vy: 0
+      }));
+    }
+
+    function createLinks() {
+      linksRoot.textContent = "";
+      world.bodies = linkData.map((item, index) => {
+        const node = document.createElement("a");
+        node.className = "drowning-link";
+        node.href = item.href;
+        node.textContent = item.label;
+        node.dataset.underwater = "false";
+        node.addEventListener("click", () => {
+          node.animate(
+            [
+              { filter: "brightness(1.45)" },
+              { filter: node.dataset.underwater === "true" ? "blur(0.25px) contrast(0.9) saturate(0.82)" : "none" }
+            ],
+            { duration: 240, easing: "ease-out" }
+          );
+        });
+        linksRoot.appendChild(node);
+
+        return {
+          node,
+          label: item.label,
+          mass: item.mass,
+          width: 120,
+          height: 42,
+          x: world.width * item.x,
+          y: -80 - index * 18,
+          vx: (Math.random() - 0.5) * 28,
+          vy: 0,
+          angle: (Math.random() - 0.5) * 0.08,
+          spin: 0,
+          delay: item.delay,
+          state: "waiting",
+          hitWater: false,
+          settled: false,
+          groundAngle: (Math.random() - 0.5) * 0.32
+        };
+      });
+
+      requestAnimationFrame(measureLinks);
+    }
+
+    function measureLinks() {
+      for (const body of world.bodies) {
+        const rect = body.node.getBoundingClientRect();
+        body.width = rect.width;
+        body.height = rect.height;
+        body.x = clamp(body.x, body.width / 2 + 10, world.width - body.width / 2 - 10);
+      }
+    }
+
+    function resize() {
+      world.dpr = Math.min(window.devicePixelRatio || 1, 2);
+      world.width = window.innerWidth;
+      world.height = window.innerHeight;
+      world.waterLevel = Math.round(world.height * 0.48);
+      world.bottom = Math.round(world.height * 0.84);
+      resizeCanvas(waterCanvas, waterCtx);
+      resizeCanvas(splashCanvas, splashCtx);
+      makePoints();
+      measureLinks();
+    }
+
+    function disturbWater(x, force) {
+      if (!world.points.length) return;
+      const spacing = world.width / (world.points.length - 1);
+      const center = clamp(Math.round(x / spacing), 0, world.points.length - 1);
+      const radius = 8;
+
+      for (let i = center - radius; i <= center + radius; i += 1) {
+        if (!world.points[i]) continue;
+        const distance = Math.abs(i - center) / radius;
+        const falloff = Math.cos(distance * Math.PI * 0.5);
+        world.points[i].vy += force * falloff;
+      }
+    }
+
+    function spawnSplash(x, y, strength, direction) {
+      const amount = clamp(Math.round(strength * 0.26), 8, 30);
+
+      for (let i = 0; i < amount; i += 1) {
+        const side = Math.random() < 0.5 ? -1 : 1;
+        world.droplets.push({
+          x: x + (Math.random() - 0.5) * 46,
+          y: y + (Math.random() - 0.5) * 8,
+          vx: side * (70 + Math.random() * 170) + direction * 0.22,
+          vy: -170 - Math.random() * 230 - strength * 0.7,
+          age: 0,
+          life: 0.58 + Math.random() * 0.52,
+          size: 1.5 + Math.random() * 3.5
+        });
+      }
+    }
+
+    function updateWater(dt) {
+      const tension = 980;
+      const damping = 3.9;
+      const spread = 0.145;
+      const points = world.points;
+
+      for (let i = 0; i < points.length; i += 1) {
+        const left = points[i - 1]?.y ?? points[i].y;
+        const right = points[i + 1]?.y ?? points[i].y;
+        const targetForce = (left + right - 2 * points[i].y) * tension;
+        points[i].vy += targetForce * dt;
+        points[i].vy -= points[i].vy * damping * dt;
+      }
+
+      for (let pass = 0; pass < 3; pass += 1) {
+        for (let i = 0; i < points.length; i += 1) {
+          const current = points[i];
+          if (points[i - 1]) {
+            const delta = spread * (current.y - points[i - 1].y);
+            points[i - 1].vy += delta;
+          }
+          if (points[i + 1]) {
+            const delta = spread * (current.y - points[i + 1].y);
+            points[i + 1].vy += delta;
+          }
+        }
+      }
+
+      for (const point of points) {
+        point.y += point.vy * dt;
+        point.y *= 0.997;
+      }
+    }
+
+    function updateBodies(dt) {
+      for (const body of world.bodies) {
+        if (world.time < body.delay) {
+          body.state = "waiting";
+          continue;
+        }
+
+        if (body.settled) {
+          body.angle += (body.groundAngle - body.angle) * Math.min(1, dt * 7);
+          body.spin *= 0.82;
+          continue;
+        }
+
+        const centerUnderwater = body.y > world.waterLevel + 4;
+        const topUnderwater = body.y - body.height / 2 > world.waterLevel;
+        const bottomCrossedWater = body.y + body.height / 2 >= world.waterLevel;
+
+        if (!body.hitWater && bottomCrossedWater) {
+          body.hitWater = true;
+          body.state = "impact";
+          const impact = clamp(body.vy * body.mass, 100, 620);
+          disturbWater(body.x, impact * 0.09);
+          spawnSplash(body.x, world.waterLevel, impact, body.vx);
+          body.spin += (Math.random() < 0.5 ? -1 : 1) * (2.3 + impact * 0.006);
+          body.vx += (Math.random() - 0.5) * 70;
+        }
+
+        if (centerUnderwater) {
+          body.state = "sinking";
+          const depth = clamp((body.y - world.waterLevel) / Math.max(1, world.bottom - world.waterLevel), 0, 1);
+          const buoyancy = 255 * (1 - depth * 0.32) / body.mass;
+          const drag = 1 + depth * 7.5;
+          body.vy += (540 - buoyancy) * dt;
+          body.vx -= body.vx * drag * dt;
+          body.vy -= body.vy * drag * 0.42 * dt;
+          body.spin -= body.spin * drag * 0.36 * dt;
+          body.spin += Math.sin(world.time * 0.002 + body.mass * 8) * 0.2 * dt;
+        } else {
+          body.state = body.hitWater ? "impact" : "falling";
+          body.vy += 820 * dt;
+          body.vx -= body.vx * 0.1 * dt;
+          body.spin -= body.spin * 0.05 * dt;
+        }
+
+        body.x += body.vx * dt;
+        body.y += body.vy * dt;
+        body.angle += body.spin * dt;
+
+        const leftLimit = body.width / 2 + 14;
+        const rightLimit = world.width - body.width / 2 - 14;
+        if (body.x < leftLimit || body.x > rightLimit) {
+          body.x = clamp(body.x, leftLimit, rightLimit);
+          body.vx *= -0.42;
+          body.spin += body.vx * 0.01;
+        }
+
+        const floorY = world.bottom - body.height / 2 - 4;
+        if (body.y >= floorY) {
+          body.y = floorY;
+          if (Math.abs(body.vy) > 120) {
+            disturbWater(body.x, -Math.abs(body.vy) * 0.012);
+          }
+          body.vy *= -0.08;
+          body.vx *= 0.62;
+          body.spin *= 0.48;
+          if (Math.abs(body.vx) < 4 && Math.abs(body.vy) < 10 && Math.abs(body.spin) < 0.08) {
+            body.settled = true;
+            body.state = "resting";
+            body.vx = 0;
+            body.vy = 0;
+            body.spin = 0;
+          }
+        }
+
+        body.node.dataset.underwater = topUnderwater ? "true" : "false";
+      }
+    }
+
+    function updateDroplets(dt) {
+      for (const drop of world.droplets) {
+        drop.age += dt;
+        drop.vy += 780 * dt;
+        drop.vx *= 0.995;
+        drop.x += drop.vx * dt;
+        drop.y += drop.vy * dt;
+
+        if (drop.y > world.waterLevel && drop.vy > 0 && drop.age < drop.life) {
+          disturbWater(drop.x, drop.size * 2.3);
+          drop.age = drop.life + 1;
+        }
+      }
+
+      world.droplets = world.droplets.filter((drop) => drop.age < drop.life && drop.y < world.height + 30);
+    }
+
+    function renderLinks() {
+      for (const body of world.bodies) {
+        const visibleY = world.time < body.delay ? -140 : body.y;
+        body.node.style.transform = `translate(${body.x - body.width / 2}px, ${visibleY - body.height / 2}px) rotate(${body.angle}rad)`;
+        body.node.style.opacity = world.time < body.delay ? "0" : "1";
+      }
+    }
+
+    function drawWater() {
+      waterCtx.clearRect(0, 0, world.width, world.height);
+
+      const gradient = waterCtx.createLinearGradient(0, world.waterLevel - 40, 0, world.height);
+      gradient.addColorStop(0, "rgba(54, 168, 206, 0.38)");
+      gradient.addColorStop(0.28, "rgba(16, 97, 135, 0.46)");
+      gradient.addColorStop(1, "rgba(5, 26, 38, 0.88)");
+
+      waterCtx.beginPath();
+      waterCtx.moveTo(0, world.waterLevel + world.points[0].y);
+      for (const point of world.points) {
+        waterCtx.lineTo(point.x, world.waterLevel + point.y);
+      }
+      waterCtx.lineTo(world.width, world.height);
+      waterCtx.lineTo(0, world.height);
+      waterCtx.closePath();
+      waterCtx.fillStyle = gradient;
+      waterCtx.fill();
+
+      waterCtx.save();
+      waterCtx.globalAlpha = 0.28;
+      waterCtx.strokeStyle = "rgba(229, 251, 255, 0.64)";
+      waterCtx.lineWidth = 1.4;
+      waterCtx.beginPath();
+      for (let i = 0; i < world.points.length; i += 1) {
+        const point = world.points[i];
+        const shimmer = Math.sin(world.time * 0.004 + i * 0.25) * 1.7;
+        const y = world.waterLevel + point.y + shimmer;
+        if (i === 0) waterCtx.moveTo(point.x, y);
+        else waterCtx.lineTo(point.x, y);
+      }
+      waterCtx.stroke();
+      waterCtx.restore();
+
+      waterCtx.save();
+      waterCtx.globalAlpha = 0.12;
+      waterCtx.strokeStyle = "rgba(201, 239, 255, 0.8)";
+      waterCtx.lineWidth = 1;
+      for (let y = world.waterLevel + 42; y < world.height; y += 62) {
+        waterCtx.beginPath();
+        for (let x = 0; x <= world.width; x += 22) {
+          const wave = Math.sin(x * 0.018 + world.time * 0.0015 + y * 0.022) * 6;
+          if (x === 0) waterCtx.moveTo(x, y + wave);
+          else waterCtx.lineTo(x, y + wave);
+        }
+        waterCtx.stroke();
+      }
+      waterCtx.restore();
+    }
+
+    function drawSplashes() {
+      splashCtx.clearRect(0, 0, world.width, world.height);
+
+      for (const drop of world.droplets) {
+        const t = drop.age / drop.life;
+        splashCtx.globalAlpha = Math.max(0, 1 - t);
+        splashCtx.fillStyle = "rgba(232, 251, 255, 0.95)";
+        splashCtx.beginPath();
+        splashCtx.arc(drop.x, drop.y, drop.size * (1 - t * 0.35), 0, Math.PI * 2);
+        splashCtx.fill();
+      }
+
+      splashCtx.globalAlpha = 1;
+    }
+
+    function step(now) {
+      const previous = world.lastNow ?? now;
+      const dt = Math.min(0.033, (now - previous) / 1000);
+      world.lastNow = now;
+      world.time += now === previous ? 0 : now - previous;
+
+      updateBodies(dt);
+      updateWater(dt);
+      updateDroplets(dt);
+      renderLinks();
+      drawWater();
+      drawSplashes();
+
+      requestAnimationFrame(step);
+    }
+
+    function restart() {
+      world.time = 0;
+      world.lastNow = undefined;
+      world.droplets = [];
+      makePoints();
+      createLinks();
+    }
+
+    resetButton.addEventListener("click", restart);
+    window.addEventListener("resize", resize);
+
+    resize();
+    restart();
+    requestAnimationFrame(step);
+  </script>
+</body>
+</html>
+

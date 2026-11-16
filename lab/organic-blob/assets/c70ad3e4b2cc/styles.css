@@ -1,0 +1,144 @@
+:root {
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: #edf1f5;
+  background: #11151c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 27px max(17px, calc((100vw - 1250px) / 2)) 40px;
+}
+
+header {
+  margin: 0 0 19px;
+}
+
+h1 {
+  font-size: 22px;
+  font-weight: 660;
+  margin: 0 0 8px;
+  letter-spacing: -0.02em;
+}
+
+header p {
+  color: #a9b5c4;
+  margin: 0;
+  max-width: 860px;
+  line-height: 1.55;
+  font-size: 14px;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 25px;
+  background: #1b212a;
+  border: 1px solid #333d4a;
+  padding: 13px 18px;
+  border-radius: 13px;
+  margin-bottom: 18px;
+}
+
+.controls label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  color: #d1d9e1;
+  white-space: nowrap;
+}
+
+.controls input[type='range'] {
+  width: 128px;
+  accent-color: #69c8fc;
+}
+
+.controls input[type='checkbox'] {
+  accent-color: #69c8fc;
+}
+
+button {
+  border: 1px solid #516173;
+  background: #26313e;
+  border-radius: 8px;
+  color: #f2f6fa;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+button:hover {
+  background: #334355;
+}
+
+.stage {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+  gap: 18px;
+}
+
+.panel {
+  background: #1b212a;
+  border: 1px solid #333d4a;
+  border-radius: 13px;
+  overflow: hidden;
+}
+
+.panel .caption {
+  padding: 12px 14px;
+  border-bottom: 1px solid #333d4a;
+  font-size: 14px;
+  font-weight: 620;
+}
+
+.panel .caption span {
+  display: block;
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #a9b5c4;
+  margin-top: 2px;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: white;
+}
+
+.note {
+  margin-top: 18px;
+  border-top: 1px solid #303843;
+  padding-top: 12px;
+  color: #abb7c3;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+code {
+  background: #273240;
+  border-radius: 4px;
+  padding: 2px 5px;
+  color: #d6eefc;
+}
+
+@media (max-width: 850px) {
+  .stage {
+    grid-template-columns: 1fr;
+  }
+
+  body {
+    padding: 18px 12px;
+  }
+
+  .controls {
+    gap: 13px;
+  }
+}

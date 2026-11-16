@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Реконструкция двух органических анимаций</title>
+<link rel="stylesheet" href="./assets/c70ad3e4b2cc/styles.css">
+</head>
+<body>
+<header>
+<h1>Две «живые» формы — процедурная реконструкция</h1>
+<p>Это не восстановленные оригиналы, а две независимые модели, собранные по неподвижным кадрам. Во всех режимах движение контура генерируется непрерывным во времени низкочастотным шумом. Можно выключить оптические эффекты и увидеть сам принцип анимации.</p>
+</header>
+<div class="controls">
+ <label>Скорость <input id="speed" type="range" min="0" max="250" value="100" step="1"><output id="speedOut">1.00×</output></label>
+ <label>Деформация <input id="deform" type="range" min="0" max="230" value="100" step="1"><output id="deformOut">1.00×</output></label>
+ <label>Дрейф цвета <input id="drift" type="range" min="0" max="220" value="100" step="1"><output id="driftOut">1.00×</output></label>
+ <label><input type="checkbox" id="schematic"> Только контуры и контрольные точки</label>
+ <button id="pause">Пауза</button><button id="reset">Начало</button>
+</div>
+<div class="stage">
+ <section class="panel"><div class="caption">01 · Светящаяся граница<span>Один силуэт + две цветные каймы + широкий световой ореол + мягкая заливка</span></div><canvas width="720" height="720" id="one"></canvas></section>
+ <section class="panel"><div class="caption">02 · Цветовые массы<span>Силуэт-маска + несколько независимо движущихся размытых цветов + тонкие внутренние кривые</span></div><canvas width="720" height="900" id="two"></canvas></section>
+</div>
+<p class="note">Контуры здесь построены из замкнутых кривых Catmull–Rom, превращённых в кривые Безье. Медленные, коррелированные изменения радиусов дают органическое движение без симуляции жидкости и без покадровых ключей. Модель можно перенести в Blender (Geometry Nodes + шейдер / композитор), After Effects или WebGL. Угол и освещение имитируются в 2D — объёмная сетка не нужна.</p>
+<script type="module" src="./assets/c70ad3e4b2cc/js/app.js"></script>
+</body>
+</html>

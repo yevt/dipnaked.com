@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Drowning Links Experiment 08</title>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    window.EXPERIMENT_CONFIG = {
+      id: 8,
+      word: "drowning",
+      gravity: 325,
+      waterLevel: 0.54,
+      floorLevel: 0.965,
+      fontScale: 0.07,
+      fontMax: 92,
+      sinkBias: 1.43,
+      buoyancy: 0.22,
+      normalDrag: 1.5,
+      viscousDrag: 2.15,
+      angularDamping: 0.18,
+      impactImpulse: 11.2,
+      impactLoss: 0.77,
+      splashLevel: 1.9,
+      current: 16,
+      densityGradient: 0.24,
+      turbulenceTorque: 0.9,
+      bubbles: true,
+      bubbleRate: 2.3,
+      restBubbleRate: 1.7,
+      bubbleSurfaceKick: 3.8,
+      sediment: true,
+      contourSamples: 340
+    };
+  </script>
+  <script src="./water-engine.js"></script>
+</body>
+</html>

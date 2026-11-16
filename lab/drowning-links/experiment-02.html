@@ -1,0 +1,799 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Drowning Links Experiment 02</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --surface: rgba(219, 248, 255, 0.86);
+      --water-top: rgba(42, 133, 169, 0.34);
+      --water-mid: rgba(16, 72, 105, 0.58);
+      --water-deep: rgba(3, 17, 28, 0.9);
+      --ink: rgba(241, 248, 255, 0.96);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, #151b1f 0%, #101a22 51%, #071827 51%, #020a10 100%);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .stage {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      isolation: isolate;
+    }
+
+    .sky {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 50% 8%, rgba(210, 232, 244, 0.12), transparent 24rem),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 45%);
+    }
+
+    .bed {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 18vh;
+      z-index: 2;
+      pointer-events: none;
+      background:
+        linear-gradient(180deg, transparent, rgba(96, 75, 50, 0.22) 28%, rgba(98, 76, 48, 0.52)),
+        repeating-linear-gradient(96deg, rgba(255, 232, 176, 0.035) 0 1px, transparent 1px 17px);
+    }
+
+    canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    #water {
+      z-index: 5;
+    }
+
+    #splash {
+      z-index: 7;
+    }
+
+    .word-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 4;
+    }
+
+    .drowning-word {
+      position: absolute;
+      left: 0;
+      top: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--ink);
+      font-weight: 820;
+      font-size: var(--word-size, 96px);
+      line-height: 1;
+      letter-spacing: 0;
+      white-space: nowrap;
+      text-decoration: none;
+      text-shadow:
+        0 1px 0 rgba(0, 0, 0, 0.34),
+        0 0 1.6rem rgba(154, 218, 255, 0.16);
+      user-select: none;
+      touch-action: manipulation;
+      will-change: left, top, transform, filter, opacity;
+    }
+
+    .drowning-word:focus-visible {
+      outline: 2px solid rgba(238, 250, 255, 0.9);
+      outline-offset: 0.24em;
+    }
+
+    .drowning-word[data-underwater="true"] {
+      color: rgba(210, 235, 248, 0.74);
+      filter: blur(0.35px) contrast(0.88) saturate(0.82);
+      text-shadow: 0 0 0.9rem rgba(111, 205, 255, 0.44);
+    }
+
+    .controls {
+      position: absolute;
+      top: clamp(0.8rem, 2vw, 1.5rem);
+      right: clamp(0.8rem, 2vw, 1.5rem);
+      z-index: 9;
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    input,
+    button {
+      height: 2.35rem;
+      border: 1px solid rgba(222, 242, 255, 0.24);
+      border-radius: 0.35rem;
+      color: rgba(242, 249, 255, 0.94);
+      background: rgba(7, 15, 21, 0.66);
+      font: 600 0.92rem/1 Inter, ui-sans-serif, system-ui, sans-serif;
+    }
+
+    input {
+      width: min(11rem, 38vw);
+      padding: 0 0.72rem;
+      letter-spacing: 0;
+    }
+
+    button {
+      padding: 0 0.85rem;
+      cursor: pointer;
+    }
+
+    input:focus-visible,
+    button:focus-visible {
+      outline: 2px solid rgba(238, 250, 255, 0.9);
+      outline-offset: 0.22rem;
+    }
+
+    button:hover {
+      background: rgba(18, 38, 51, 0.82);
+    }
+
+    @media (max-width: 620px) {
+      .controls {
+        left: 0.8rem;
+        right: 0.8rem;
+        justify-content: flex-end;
+      }
+
+      input {
+        flex: 1;
+        min-width: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="stage" aria-label="Drowning link physics experiment">
+    <div class="sky"></div>
+    <form class="controls" id="controls">
+      <input id="wordInput" value="drowning" maxlength="18" spellcheck="false" aria-label="Word">
+      <button type="submit">Drop</button>
+    </form>
+    <div class="word-layer">
+      <a class="drowning-word" id="word" href="#drowning">drowning</a>
+    </div>
+    <canvas id="water" aria-hidden="true"></canvas>
+    <canvas id="splash" aria-hidden="true"></canvas>
+    <div class="bed"></div>
+  </main>
+
+  <script>
+    const wordEl = document.querySelector("#word");
+    const waterCanvas = document.querySelector("#water");
+    const splashCanvas = document.querySelector("#splash");
+    const wordInput = document.querySelector("#wordInput");
+    const controls = document.querySelector("#controls");
+    const waterCtx = waterCanvas.getContext("2d");
+    const splashCtx = splashCanvas.getContext("2d");
+
+    const gravity = 320;
+    const fixedStep = 1 / 120;
+    let rng = Math.random;
+
+    const world = {
+      width: 0,
+      height: 0,
+      dpr: 1,
+      waterY: 0,
+      floorY: 0,
+      time: 0,
+      lastNow: 0,
+      accumulator: 0,
+      surface: [],
+      droplets: [],
+      body: null,
+      impactDone: false
+    };
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function seededGenerator(seedText) {
+      let seed = 2166136261;
+      for (let i = 0; i < seedText.length; i += 1) {
+        seed ^= seedText.charCodeAt(i);
+        seed = Math.imul(seed, 16777619);
+      }
+      return () => {
+        seed += 0x6D2B79F5;
+        let value = seed;
+        value = Math.imul(value ^ value >>> 15, value | 1);
+        value ^= value + Math.imul(value ^ value >>> 7, value | 61);
+        return ((value ^ value >>> 14) >>> 0) / 4294967296;
+      };
+    }
+
+    function rand(min, max) {
+      return min + rng() * (max - min);
+    }
+
+    function rotatePoint(x, y, angle) {
+      const c = Math.cos(angle);
+      const s = Math.sin(angle);
+      return {
+        x: x * c - y * s,
+        y: x * s + y * c
+      };
+    }
+
+    function resizeCanvas(canvas, ctx) {
+      canvas.width = Math.round(world.width * world.dpr);
+      canvas.height = Math.round(world.height * world.dpr);
+      ctx.setTransform(world.dpr, 0, 0, world.dpr, 0, 0);
+    }
+
+    function makeSurface() {
+      const count = Math.max(120, Math.round(world.width / 7));
+      world.surface = Array.from({ length: count }, (_, index) => ({
+        x: (index / (count - 1)) * world.width,
+        y: 0,
+        vy: 0
+      }));
+    }
+
+    function sampleSurface(x) {
+      if (world.surface.length < 2) return world.waterY;
+      const spacing = world.width / (world.surface.length - 1);
+      const raw = clamp(x / spacing, 0, world.surface.length - 1);
+      const left = Math.floor(raw);
+      const right = Math.min(world.surface.length - 1, left + 1);
+      const t = raw - left;
+      return world.waterY + world.surface[left].y * (1 - t) + world.surface[right].y * t;
+    }
+
+    function disturbSurface(x, strength, radius) {
+      const spacing = world.width / (world.surface.length - 1);
+      const center = clamp(Math.round(x / spacing), 0, world.surface.length - 1);
+      const pointRadius = Math.max(3, Math.round(radius / spacing));
+
+      for (let i = center - pointRadius * 2; i <= center + pointRadius * 2; i += 1) {
+        const point = world.surface[i];
+        if (!point) continue;
+
+        const d = Math.abs(i - center) / pointRadius;
+        if (d <= 1) {
+          point.vy += strength * Math.cos(d * Math.PI * 0.5);
+        } else if (d <= 2) {
+          point.vy -= strength * 0.28 * Math.sin((d - 1) * Math.PI);
+        }
+      }
+    }
+
+    function buildGlyphModel(text, fontSize) {
+      const family = "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
+      const font = `820 ${fontSize}px ${family}`;
+      const pad = Math.ceil(fontSize * 0.22);
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+      ctx.font = font;
+      const metrics = ctx.measureText(text);
+      const left = metrics.actualBoundingBoxLeft || 0;
+      const right = metrics.actualBoundingBoxRight || metrics.width;
+      const ascent = metrics.actualBoundingBoxAscent || fontSize * 0.78;
+      const descent = metrics.actualBoundingBoxDescent || fontSize * 0.24;
+      const width = Math.ceil(left + right + pad * 2);
+      const height = Math.ceil(ascent + descent + pad * 2);
+
+      canvas.width = Math.max(1, width);
+      canvas.height = Math.max(1, height);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.font = font;
+      ctx.textBaseline = "alphabetic";
+      ctx.fillStyle = "#fff";
+      ctx.fillText(text, pad + left, pad + ascent);
+
+      const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const alpha = image.data;
+      let area = 0;
+      let sumX = 0;
+      let sumY = 0;
+
+      for (let y = 0; y < canvas.height; y += 1) {
+        for (let x = 0; x < canvas.width; x += 1) {
+          const a = alpha[(y * canvas.width + x) * 4 + 3] / 255;
+          if (a <= 0.08) continue;
+          area += a;
+          sumX += x * a;
+          sumY += y * a;
+        }
+      }
+
+      const comX = area ? sumX / area : canvas.width / 2;
+      const comY = area ? sumY / area : canvas.height / 2;
+      let inertia = 0;
+
+      for (let y = 0; y < canvas.height; y += 2) {
+        for (let x = 0; x < canvas.width; x += 2) {
+          const a = alpha[(y * canvas.width + x) * 4 + 3] / 255;
+          if (a <= 0.08) continue;
+          const dx = x - comX;
+          const dy = y - comY;
+          inertia += (dx * dx + dy * dy) * a;
+        }
+      }
+
+      const probes = [];
+      const sliceCount = clamp(Math.round(canvas.width / 9), 18, 58);
+      const sliceWidth = canvas.width / sliceCount;
+
+      for (let i = 0; i < sliceCount; i += 1) {
+        const x0 = Math.floor(i * sliceWidth);
+        const x1 = Math.min(canvas.width - 1, Math.ceil((i + 1) * sliceWidth));
+        let top = Infinity;
+        let bottom = -Infinity;
+        let sliceArea = 0;
+        let sumColumnX = 0;
+
+        for (let x = x0; x <= x1; x += 1) {
+          for (let y = 0; y < canvas.height; y += 1) {
+            const a = alpha[(y * canvas.width + x) * 4 + 3] / 255;
+            if (a <= 0.12) continue;
+            top = Math.min(top, y);
+            bottom = Math.max(bottom, y);
+            sliceArea += a;
+            sumColumnX += x * a;
+          }
+        }
+
+        if (!sliceArea || bottom === -Infinity) continue;
+
+        const centerX = sumColumnX / sliceArea;
+        const coverage = clamp(sliceArea / (sliceWidth * canvas.height * 0.58), 0.08, 1.4);
+        probes.push({
+          rx: centerX - comX,
+          topRy: top - comY,
+          bottomRy: bottom - comY,
+          weight: coverage
+        });
+      }
+
+      const totalProbeWeight = probes.reduce((sum, probe) => sum + probe.weight, 0) || 1;
+      for (const probe of probes) {
+        probe.weight /= totalProbeWeight;
+      }
+
+      const mass = clamp(area / 2400, 1.4, 7);
+      const moment = clamp((inertia / Math.max(1, area)) * mass * 0.72, 24000, 210000);
+
+      return {
+        text,
+        font,
+        fontSize,
+        width: canvas.width,
+        height: canvas.height,
+        comX,
+        comY,
+        area,
+        inkRatio: area / (canvas.width * canvas.height),
+        mass,
+        inertia: moment,
+        probes
+      };
+    }
+
+    function makeBody(text) {
+      const cleanText = (text || "drowning").trim().replace(/\s+/g, " ").slice(0, 18) || "drowning";
+      const fontSize = clamp(world.width * 0.074, 56, 96);
+      wordEl.textContent = cleanText;
+      wordEl.href = `#${encodeURIComponent(cleanText.toLowerCase())}`;
+      wordEl.style.setProperty("--word-size", `${fontSize}px`);
+
+      const model = buildGlyphModel(cleanText, fontSize);
+      wordEl.style.width = `${model.width}px`;
+      wordEl.style.height = `${model.height}px`;
+      wordEl.style.transformOrigin = `${model.comX}px ${model.comY}px`;
+
+      const centerX = world.width * rand(0.43, 0.57);
+      const startAngle = rand(-0.34, 0.34);
+      const startY = -model.height * 0.55;
+
+      return {
+        model,
+        x: centerX,
+        y: startY,
+        vx: rand(-18, 18),
+        vy: rand(12, 42),
+        angle: startAngle,
+        omega: rand(-0.18, 0.18),
+        settled: false,
+        underwater: false,
+        densityBias: 1.24 + clamp((0.22 - model.inkRatio) * 1.2, -0.06, 0.18)
+      };
+    }
+
+    function applyForce(body, fx, fy, rx, ry, dt) {
+      body.vx += (fx / body.model.mass) * dt;
+      body.vy += (fy / body.model.mass) * dt;
+      const torque = rx * fy - ry * fx;
+      body.omega += (torque / body.model.inertia) * dt;
+    }
+
+    function pointWorld(body, rx, ry) {
+      const rotated = rotatePoint(rx, ry, body.angle);
+      return {
+        x: body.x + rotated.x,
+        y: body.y + rotated.y,
+        rx: rotated.x,
+        ry: rotated.y
+      };
+    }
+
+    function pointVelocity(body, rx, ry) {
+      return {
+        x: body.vx - body.omega * ry,
+        y: body.vy + body.omega * rx
+      };
+    }
+
+    function spawnSplash(x, y, impactSpeed, width, tilt) {
+      const amount = clamp(Math.round(impactSpeed / 42 + width / 36), 7, 26);
+      const spread = clamp(width * 0.52, 20, 130);
+
+      for (let i = 0; i < amount; i += 1) {
+        const side = Math.random() < 0.5 ? -1 : 1;
+        const sideBias = side * rand(0.25, 1);
+        world.droplets.push({
+          x: x + rand(-spread, spread) * 0.35,
+          y: y + rand(-3, 3),
+          vx: sideBias * rand(70, 210) + tilt * 38,
+          vy: -rand(130, 310) - impactSpeed * rand(0.08, 0.22),
+          age: 0,
+          life: rand(0.42, 0.86),
+          size: rand(1.1, 3.4)
+        });
+      }
+    }
+
+    function processFirstImpact(body) {
+      if (world.impactDone) return;
+
+      const contacts = [];
+      for (const probe of body.model.probes) {
+        const bottom = pointWorld(body, probe.rx, probe.bottomRy);
+        const surface = sampleSurface(bottom.x);
+        if (bottom.y >= surface) {
+          const velocity = pointVelocity(body, bottom.rx, bottom.ry);
+          contacts.push({ point: bottom, velocity, probe });
+        }
+      }
+
+      if (!contacts.length) return;
+
+      world.impactDone = true;
+      const avgX = contacts.reduce((sum, item) => sum + item.point.x * item.probe.weight, 0) /
+        contacts.reduce((sum, item) => sum + item.probe.weight, 0);
+      const avgVy = contacts.reduce((sum, item) => sum + Math.max(0, item.velocity.y) * item.probe.weight, 0) /
+        contacts.reduce((sum, item) => sum + item.probe.weight, 0);
+      const minX = Math.min(...contacts.map((item) => item.point.x));
+      const maxX = Math.max(...contacts.map((item) => item.point.x));
+      const contactWidth = Math.max(24, maxX - minX);
+
+      for (const item of contacts) {
+        const impulse = clamp(item.velocity.y * item.probe.weight * 9.5, 0, 260);
+        disturbSurface(item.point.x, impulse, contactWidth * 0.36);
+      }
+
+      body.omega += clamp(body.angle * 1.8 + body.vx * 0.006, -1.8, 1.8);
+      body.vx *= 0.78;
+      body.vy *= 0.82;
+      spawnSplash(avgX, world.waterY, avgVy, contactWidth, body.angle);
+    }
+
+    function updateBody(dt) {
+      const body = world.body;
+      if (!body || body.settled) return;
+
+      processFirstImpact(body);
+
+      applyForce(body, 0, body.model.mass * gravity * body.densityBias, 0, 0, dt);
+
+      let submergedWeight = 0;
+      let topUnderwater = true;
+
+      for (const probe of body.model.probes) {
+        const bottom = pointWorld(body, probe.rx, probe.bottomRy);
+        const top = pointWorld(body, probe.rx, probe.topRy);
+        const surface = sampleSurface(bottom.x);
+        const depth = bottom.y - surface;
+
+        if (top.y < surface) topUnderwater = false;
+        if (depth <= 0) continue;
+
+        const sub = clamp(depth / (body.model.height * 0.52), 0, 1);
+        const velocity = pointVelocity(body, bottom.rx, bottom.ry);
+        const lift = -body.model.mass * gravity * 0.46 * probe.weight * sub;
+        const dragX = -velocity.x * body.model.mass * (1.0 + sub * 4.0) * probe.weight * sub;
+        const dragY = -velocity.y * body.model.mass * (1.1 + sub * 5.2) * probe.weight * sub;
+
+        applyForce(body, dragX, lift + dragY, bottom.rx, bottom.ry, dt);
+        submergedWeight += probe.weight * sub;
+
+        if (depth < 18 && Math.abs(velocity.y) > 55) {
+          disturbSurface(bottom.x, clamp(velocity.y * probe.weight * 0.42, -28, 34), 30);
+        }
+      }
+
+      if (submergedWeight > 0) {
+        body.omega *= 1 - clamp(2.7 * submergedWeight * dt, 0, 0.18);
+      } else {
+        body.omega *= 1 - 0.03 * dt;
+      }
+
+      body.vx *= 1 - 0.02 * dt;
+      body.vx = clamp(body.vx, -520, 520);
+      body.vy = clamp(body.vy, -680, 860);
+      body.omega = clamp(body.omega, -3.8, 3.8);
+      body.x += body.vx * dt;
+      body.y += body.vy * dt;
+      body.angle += body.omega * dt;
+      body.underwater = body.y - body.model.height * 0.18 > world.waterY;
+
+      const margin = Math.max(20, body.model.width * 0.2);
+      if (body.x < margin || body.x > world.width - margin) {
+        body.x = clamp(body.x, margin, world.width - margin);
+        body.vx *= -0.34;
+        body.omega += body.vx * 0.004;
+      }
+
+      const bottomPoints = body.model.probes.map((probe) => pointWorld(body, probe.rx, probe.bottomRy));
+      const deepest = Math.max(...bottomPoints.map((point) => point.y));
+      if (deepest > world.floorY) {
+        const penetration = deepest - world.floorY;
+        body.y -= penetration;
+        body.vy *= -0.06;
+        body.vx *= 0.62;
+        body.omega *= 0.5;
+        disturbSurface(body.x, -Math.abs(body.vy) * 0.01, body.model.width * 0.2);
+
+        if (Math.abs(body.vx) < 5 && Math.abs(body.vy) < 9 && Math.abs(body.omega) < 0.035) {
+          body.settled = true;
+          body.vx = 0;
+          body.vy = 0;
+          body.omega = 0;
+        }
+      }
+    }
+
+    function updateSurface(dt) {
+      const points = world.surface;
+      const neighbor = 72;
+      const restore = 9.5;
+      const damping = 0.82;
+
+      for (let i = 0; i < points.length; i += 1) {
+        const left = points[i - 1]?.y ?? points[i].y;
+        const right = points[i + 1]?.y ?? points[i].y;
+        const curvature = left + right - 2 * points[i].y;
+        const accel = curvature * neighbor - points[i].y * restore - points[i].vy * damping;
+        points[i].vy += accel * dt;
+      }
+
+      for (const point of points) {
+        point.y += point.vy * dt;
+        if (Math.abs(point.y) < 0.002 && Math.abs(point.vy) < 0.002) {
+          point.y = 0;
+          point.vy = 0;
+        }
+      }
+    }
+
+    function updateDroplets(dt) {
+      for (const drop of world.droplets) {
+        drop.age += dt;
+        drop.vy += gravity * 1.35 * dt;
+        drop.vx *= 1 - 0.12 * dt;
+        drop.x += drop.vx * dt;
+        drop.y += drop.vy * dt;
+
+        if (drop.y > sampleSurface(drop.x) && drop.vy > 0 && drop.age < drop.life) {
+          disturbSurface(drop.x, drop.size * 2.4, 18);
+          drop.age = drop.life + 1;
+        }
+      }
+
+      world.droplets = world.droplets.filter((drop) => drop.age < drop.life && drop.y < world.height + 30);
+    }
+
+    function renderWord() {
+      const body = world.body;
+      if (!body) return;
+      wordEl.dataset.underwater = body.underwater ? "true" : "false";
+      wordEl.dataset.probes = String(body.model.probes.length);
+      wordEl.dataset.mass = body.model.mass.toFixed(2);
+      wordEl.dataset.waveMin = Math.min(...world.surface.map((point) => point.y)).toFixed(1);
+      wordEl.dataset.waveMax = Math.max(...world.surface.map((point) => point.y)).toFixed(1);
+      wordEl.dataset.y = body.y.toFixed(1);
+      wordEl.dataset.vy = body.vy.toFixed(1);
+      wordEl.dataset.omega = body.omega.toFixed(3);
+      wordEl.dataset.settled = body.settled ? "true" : "false";
+      wordEl.dataset.world = `${world.width}x${world.height}`;
+      wordEl.dataset.water = world.waterY.toFixed(1);
+      wordEl.dataset.floor = world.floorY.toFixed(1);
+      wordEl.dataset.deepest = Math.max(...body.model.probes.map((probe) => pointWorld(body, probe.rx, probe.bottomRy).y)).toFixed(1);
+      wordEl.style.left = `${body.x - body.model.comX}px`;
+      wordEl.style.top = `${body.y - body.model.comY}px`;
+      wordEl.style.transform = `rotate(${body.angle}rad)`;
+    }
+
+    function drawWater() {
+      waterCtx.clearRect(0, 0, world.width, world.height);
+
+      const fill = waterCtx.createLinearGradient(0, world.waterY, 0, world.height);
+      fill.addColorStop(0, "rgba(45, 144, 181, 0.34)");
+      fill.addColorStop(0.38, "rgba(16, 74, 109, 0.58)");
+      fill.addColorStop(1, "rgba(2, 12, 20, 0.9)");
+
+      waterCtx.beginPath();
+      waterCtx.moveTo(0, world.waterY + world.surface[0].y);
+      for (const point of world.surface) {
+        waterCtx.lineTo(point.x, world.waterY + point.y);
+      }
+      waterCtx.lineTo(world.width, world.height);
+      waterCtx.lineTo(0, world.height);
+      waterCtx.closePath();
+      waterCtx.fillStyle = fill;
+      waterCtx.fill();
+
+      waterCtx.save();
+      waterCtx.strokeStyle = "rgba(221, 247, 255, 0.88)";
+      waterCtx.lineWidth = 1.5;
+      waterCtx.beginPath();
+      for (let i = 0; i < world.surface.length; i += 1) {
+        const point = world.surface[i];
+        const y = world.waterY + point.y;
+        if (i === 0) waterCtx.moveTo(point.x, y);
+        else waterCtx.lineTo(point.x, y);
+      }
+      waterCtx.stroke();
+      waterCtx.restore();
+    }
+
+    function drawDroplets() {
+      splashCtx.clearRect(0, 0, world.width, world.height);
+      splashCtx.lineCap = "round";
+
+      for (const drop of world.droplets) {
+        const t = drop.age / drop.life;
+        const alpha = Math.max(0, 1 - t);
+        splashCtx.globalAlpha = alpha;
+        splashCtx.strokeStyle = "rgba(230, 250, 255, 0.92)";
+        splashCtx.lineWidth = drop.size;
+        splashCtx.beginPath();
+        splashCtx.moveTo(drop.x, drop.y);
+        splashCtx.lineTo(drop.x - drop.vx * 0.018, drop.y - drop.vy * 0.018);
+        splashCtx.stroke();
+      }
+
+      splashCtx.globalAlpha = 1;
+    }
+
+    function tick(dt) {
+      world.time += dt * 1000;
+      updateBody(dt);
+      updateSurface(dt);
+      updateDroplets(dt);
+    }
+
+    function frame(now) {
+      if (!world.lastNow) world.lastNow = now;
+      const frameDt = Math.min(0.06, (now - world.lastNow) / 1000);
+      world.lastNow = now;
+      world.accumulator += frameDt;
+
+      while (world.accumulator >= fixedStep) {
+        tick(fixedStep);
+        world.accumulator -= fixedStep;
+      }
+
+      renderWord();
+      drawWater();
+      drawDroplets();
+      requestAnimationFrame(frame);
+    }
+
+    function resize() {
+      world.dpr = Math.min(window.devicePixelRatio || 1, 2);
+      world.width = window.innerWidth;
+      world.height = window.innerHeight;
+      world.waterY = Math.round(world.height * 0.54);
+      world.floorY = Math.round(world.height * 0.94);
+      resizeCanvas(waterCanvas, waterCtx);
+      resizeCanvas(splashCanvas, splashCtx);
+      makeSurface();
+      world.body = makeBody(wordInput.value);
+      world.impactDone = false;
+      world.droplets = [];
+    }
+
+    function restart(text) {
+      world.time = 0;
+      world.lastNow = 0;
+      world.accumulator = 0;
+      makeSurface();
+      world.droplets = [];
+      world.impactDone = false;
+      world.body = makeBody(text || wordInput.value);
+      renderWord();
+      drawWater();
+      drawDroplets();
+    }
+
+    controls.addEventListener("submit", (event) => {
+      event.preventDefault();
+      restart(wordInput.value);
+    });
+
+    wordEl.addEventListener("click", () => {
+      wordEl.animate(
+        [
+          { opacity: 1, filter: "brightness(1.45)" },
+          { opacity: 1, filter: wordEl.dataset.underwater === "true" ? "blur(0.35px) contrast(0.88) saturate(0.82)" : "none" }
+        ],
+        { duration: 220, easing: "ease-out" }
+      );
+    });
+
+    window.addEventListener("resize", resize);
+
+    const params = new URLSearchParams(window.location.search);
+    const seed = params.get("seed");
+    if (seed) {
+      rng = seededGenerator(seed);
+    }
+
+    resize();
+
+    const captureAt = Number(params.get("at") || 0);
+    if (captureAt > 0) {
+      const steps = Math.min(1600, Math.round((captureAt / 1000) / fixedStep));
+      for (let i = 0; i < steps; i += 1) {
+        tick(fixedStep);
+      }
+      renderWord();
+      drawWater();
+      drawDroplets();
+    } else {
+      requestAnimationFrame(frame);
+    }</script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+

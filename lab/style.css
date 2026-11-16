@@ -1,0 +1,31 @@
+.lab-page h1 {
+    margin: 0;
+    font: inherit;
+}
+
+.lab-links {
+    padding: 0;
+    margin-bottom: 0;
+    list-style: none;
+    letter-spacing: 0.08em;
+}
+
+.lab-links a {
+    display: inline-block;
+    padding-block: 4px;
+}
+
+.lab-links a:focus-visible {
+    outline: 1px solid currentColor;
+    outline-offset: 4px;
+}
+
+.lab-variants {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    max-width: 18rem;
+    padding: 8px 0 0;
+    list-style: none;
+    font-variant-numeric: tabular-nums;
+}

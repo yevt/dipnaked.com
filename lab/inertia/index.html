@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f4ef">
+  <title>Инерция — симулятор движения</title>
+  <link rel="icon" href="mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <script defer src="vendor/matter.min.js"></script>
+  <script defer src="physics.js"></script>
+  <script defer src="illustration.js"></script>
+  <script defer src="mannequin.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="appbar">
+      <h1>Инерция</h1>
+      <div class="transport">
+        <button id="reset" type="button" title="Вернуть персонажа в исходную позу (R)" aria-label="Вернуть персонажа в исходную позу">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9a7.4 7.4 0 1 1 .4 7.1M5 4.5V9h4.5"/></svg>
+          <span>Сброс</span>
+        </button>
+        <button id="pause" type="button" aria-pressed="false" title="Приостановить или продолжить (пробел)">
+          <svg id="pause-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6v12m6-12v12" stroke-width="3"/></svg>
+          <span id="pause-label">Пауза</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="field" data-figure="drawing" aria-label="Поле симуляции">
+        <canvas id="scene" aria-label="Рисованный персонаж на упругой нити в невесомости">Для симуляции нужен браузер с поддержкой Canvas 2D.</canvas>
+      </section>
+
+      <aside class="sidebar" aria-label="Настройки и измерения">
+        <section class="parameters">
+          <h2>Параметры</h2>
+          <div class="figure-control">
+            <label for="figure">Фигура</label>
+            <select id="figure">
+              <option value="drawing" selected>Персонаж с рисунка</option>
+              <option value="mannequin">Деревянный манекен</option>
+            </select>
+          </div>
+          <p id="art-error" role="status" hidden>Не удалось загрузить рисунок. Проверьте PNG в папке assets.</p>
+          <div class="sliders">
+            <div class="control">
+              <div class="control-line"><label for="cord">Упругость нити</label><output for="cord" id="cord-value"></output></div>
+              <input id="cord" type="range" min="0" max="100" value="55">
+            </div>
+            <div class="control">
+              <div class="control-line"><label for="joints">Упругость суставов</label><output for="joints" id="joints-value"></output></div>
+              <input id="joints" type="range" min="0" max="100" value="55">
+            </div>
+            <div class="control">
+              <div class="control-line"><label for="damping">Внутреннее трение</label><output for="damping" id="damping-value"></output></div>
+              <input id="damping" type="range" min="0" max="100" value="0" title="При 0 % суставы свободно колеблются.">
+            </div>
+          </div>
+          <label class="skeleton-control">
+            <span>Показать скелет</span>
+            <input type="checkbox" role="switch" id="bones-toggle">
+            <span class="switch" aria-hidden="true"></span>
+          </label>
+        </section>
+
+        <dl class="cord-reading">
+          <dt>Длина нити</dt>
+          <dd><output id="extension" aria-live="off" aria-label="Длина нити">0</output> ед.</dd>
+        </dl>
+      </aside>
+    </main>
+  </div>
+  <noscript>Включите JavaScript, чтобы запустить симуляцию.</noscript>
+</body>
+</html>

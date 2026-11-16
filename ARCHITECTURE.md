@@ -71,7 +71,18 @@ feel as long as possible.
 - `lab/membrane/` — Experimental 3D logo animation (point piercing a stretched
   film; Verlet mass–spring simulation with strain-stiffening materials —
   presets in `MATERIALS`, constants in `CONFIG`, seeded imperfection, GUI on
-  `H`). Not linked from the main site.
+  `H`). Listed in the Lab catalogue.
+
+## Lab catalogue
+
+`lab/index.html` lists the experiments and is linked from the main navigation.
+It includes Membrane and both intro variants, Black Square, H Girl and its
+studies, Organic Blob, Inertia, the Synchronicity simulator, and all 14 Drowning Links experiments. `lab/style.css` adds the catalogue list styles on
+top of the existing site typography and colours.
+
+Organic Blob is built in the sibling `organic-blob-reconstruction` project.
+`npm run deploy` there builds `dist/` and mirrors it into `lab/organic-blob/`.
+The existing GitHub Pages workflow publishes these static files with the site.
 
 ## Intro (main page)
 `lab/membrane/intro/membrane.js` plays the membrane intro over the landing

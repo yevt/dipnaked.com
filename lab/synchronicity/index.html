@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Симулятор Синхронии: Хаос и Смысл</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background: #1e293b;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+        h1 { text-align: center; color: #38bdf8; margin-top: 0; }
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        @media (max-width: 600px) {
+            .controls { grid-template-columns: 1fr; }
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+        label { margin-bottom: 8px; font-weight: 500; color: #94a3b8; }
+        input[type="range"] { width: 100%; accent-color: #38bdf8; }
+        canvas {
+            background: #020617;
+            border-radius: 8px;
+            width: 100%;
+            height: 400px;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+        }
+        .stats {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+            padding: 10px;
+            background: #0f172a;
+            border-radius: 6px;
+            font-family: monospace;
+        }
+        .stat-val { color: #38bdf8; font-weight: bold; }
+        .log {
+            margin-top: 15px;
+            max-height: 100px;
+            overflow-y: auto;
+            background: #090d16;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #a7f3d0;
+            border-left: 4px solid #34d399;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Симулятор Синхронии</h1>
+    
+    <div class="controls">
+        <div class="control-group">
+            <label for="chaos">Уровень Хаоса (Случайные события):</label>
+            <input type="range" id="chaos" min="10" max="100" value="50">
+        </div>
+        <div class="control-group">
+            <label for="focus">Фокус Внимания (Поиск смысла):</label>
+            <input type="range" id="focus" min="5" max="80" value="30">
+        </div>
+    </div>
+
+    <canvas id="simCanvas"></canvas>
+
+    <div class="stats">
+        <div>Всего событий: <span id="totalEvents" class="stat-val">0</span></div>
+        <div>Замечено совпадений: <span id="matches" class="stat-val">0</span></div>
+    </div>
+
+    <div id="eventLog" class="log">Система запущена. Мозг фильтрует реальность...</div>
+</div>
+
+<script>
+const canvas = document.getElementById('simCanvas');
+const ctx = canvas.getContext('2d');
+const chaosInput = document.getElementById('chaos');
+const focusInput = document.getElementById('focus');
+const totalEventsEl = document.getElementById('totalEvents');
+const matchesEl = document.getElementById('matches');
+const logEl = document.getElementById('eventLog');
+
+// Настройка размеров под экран
+function resize() {
+    canvas.width = canvas.clientWidth;
+    canvas.height = canvas.clientHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+let particles = [];
+let totalCount = 0;
+let matchCount = 0;
+
+class Particle {
+    constructor(isMind) {
+        this.isMind = isMind; // true - мысль, false - внешнее событие
+        this.x = Math.random() * canvas.width;
+        this.y = Math.random() * canvas.height;
+        this.vx = (Math.random() - 0.5) * 2;
+        this.vy = (Math.random() - 0.5) * 2;
+        this.radius = isMind ? 4 : 3;
+        this.meaning = Math.floor(Math.random() * 5); // 5 типов смысловых паттернов
+        this.matched = false;
+    }
+
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+
+        if (this.x < 0 || this.x > canvas.width) this.vx *= -1;
+        if (this.y < 0 || this.y > canvas.height) this.vy *= -1;
+    }
+
+    draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        if (this.isMind) {
+            ctx.fillStyle = this.matched ? '#f43f5e' : '#38bdf8';
+        } else {
+            ctx.fillStyle = this.matched ? '#f43f5e' : '#64748b';
+        }
+        ctx.fill();
+    }
+}
+
+function init() {
+    particles = [];
+    // Добавляем "мысли"
+    for(let i=0; i<20; i++) particles.push(new Particle(true));
+}
+
+function addEvent() {
+    particles.push(new Particle(false));
+    totalCount++;
+    totalEventsEl.innerText = totalCount;
+    // Лимит элементов на экране
+    if (particles.filter(p => !p.isMind).length > chaosInput.value) {
+        let idx = particles.findIndex(p => !p.isMind);
+        if(idx !== -1) particles.splice(idx, 1);
+    }
+}
+
+function checkSynchronicity() {
+    const radius = parseFloat(focusInput.value);
+    
+    // Сбрасываем флаги совпадений
+    particles.forEach(p => p.matched = false);
+
+    for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+            let p1 = particles[i];
+            let p2 = particles[j];
+
+            // Проверяем связь между мыслью и внешним событием
+            if (p1.isMind !== p2.isMind && p1.meaning === p2.meaning) {
+                let dx = p1.x - p2.x;
+                let dy = p1.y - p2.y;
+                let distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < radius) {
+                    p1.matched = true;
+                    p2.matched = true;
+
+                    // Рисуем "перформативную" связь смыслового поля
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p2.x, p2.y);
+                    ctx.strokeStyle = `rgba(244, 63, 94, ${1 - distance/radius})`;
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+
+                    if (Math.random() < 0.01) { // Чтобы лог не летел слишком быстро
+                        matchCount++;
+                        matchesEl.innerText = matchCount;
+                        const meanings = ["Архетип Скарабея", "Внезапный звонок друга", "Сон в руку", "Числовой паттерн", "Дежавю"];
+                        logEl.innerHTML = `[Синхрония!] Замечена акаузальная связь: "${meanings[p1.meaning]}"<br>` + logEl.innerHTML;
+                    }
+                }
+            }
+        }
+    }
+}
+
+function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Случайная генерация внешнего хаоса событий
+    if (Math.random() < (chaosInput.value / 200)) {
+        addEvent();
+    }
+
+    particles.forEach(p => {
+        p.update();
+        p.draw();
+    });
+
+    checkSynchronicity();
+    requestAnimationFrame(animate);
+}
+
+init();
+animate();
+</script>
+
+</body>
+</html>
