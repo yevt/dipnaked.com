@@ -1,0 +1,311 @@
+/* ============================================================
+   Меню dipnaked — лист
+   ============================================================ */
+@font-face {
+    font-family: "Black Square";
+    src: url("assets/BlackSquare-v69-wordmark.woff2") format("woff2"),
+         url("assets/BlackSquare-v69-wordmark.ttf") format("truetype");
+    font-weight: 100 900;
+    font-variation-settings: "FILL" 0, "ROND" 100;
+    font-display: block;
+}
+
+:root {
+    --paper:  #fff;
+    --ink:    #000;
+    --sub:    #8c8c8c;          /* подписи: мельче и светлее слов */
+    --faint:  #6e6e6e;          /* слоган */
+
+    /* Короткая сторона экрана и радиус будущей дыры (0.5 / 2).
+       Слова не ближе --r к краям: всё содержимое живёт внутри .safe. */
+    --vmin:   min(100vw, 100vh);
+    --r:      calc(var(--vmin) * 0.25);
+
+    /* ограничены и шириной, и высотой: на низких ноутбуках список обязан
+       уместиться в безопасную зону по высоте (она = половина высоты) */
+    --word:   clamp(13px, min(0.6vw + 0.9vh + 6px, 2.4vh), 21px);
+    --subsz:  calc(var(--word) * 0.66);
+    --mark:   clamp(26px, min(2.2vw + 2.2vh, 5.5vh), 60px);
+}
+@supports (height: 100dvh) {
+    :root { --vmin: min(100vw, 100dvh); }
+}
+/* Надпись шириной ≈10em. На узком экране она может выйти за безопасную
+   зону (это не слово-ссылка), но не ближе 16px к краю экрана. */
+@media (orientation: portrait), (max-width: 700px) {
+    :root { --mark: min(clamp(26px, min(2.2vw + 2.2vh, 5.5vh), 60px), calc((100vw - 32px) / 10)); }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+html { background: var(--paper); }
+body {
+    height: 100dvh;
+    overflow: hidden;
+    background: var(--paper);
+    color: var(--ink);
+    font: 500 var(--word) / 1.2 "Satoshi", -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+ul { list-style: none; margin: 0; padding: 0; }
+h1, p { margin: 0; }
+img { display: block; }
+
+.sheet {
+    position: fixed;
+    inset: 0;
+}
+.safe {
+    position: absolute;
+    inset: var(--r);
+}
+
+/* ---------- элементы ---------- */
+.wordmark {
+    font-family: "Black Square", sans-serif;
+    font-variation-settings: "FILL" 0, "ROND" 100;
+    font-weight: normal;
+    font-size: var(--mark);
+    line-height: 1;
+    letter-spacing: 0.02em;
+}
+.slogan {
+    font-size: var(--subsz);
+    font-weight: 400;
+    letter-spacing: 0.3ch;
+    color: var(--faint);
+}
+.logo {
+    width: auto;
+    height: calc(var(--mark) * 1.6);
+}
+
+.item {
+    color: inherit;
+    text-decoration: none;
+    display: inline-flex;
+    flex-direction: column;
+    gap: 0.15em;
+    max-width: 100%;
+}
+.word { line-height: 1.1; }
+.sub {
+    font-size: var(--subsz);
+    font-weight: 400;
+    line-height: 1.25;
+    color: var(--sub);
+}
+.item:focus-visible { outline: 1px solid var(--ink); outline-offset: 4px; }
+
+/* ============================================================
+   A — «Колонка»: всё по центру одной осью.
+   Десктоп: слово | подпись в две колонки от общей оси.
+   Узкий экран: подпись под словом.
+   ============================================================ */
+[data-layout="a"] .safe {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: min(calc(var(--word) * 2), 3.5vh);
+}
+[data-layout="a"] .logo { height: calc(var(--mark) * 1.3); }
+[data-layout="a"] .brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: calc(var(--word) * 0.5);
+    text-align: center;
+}
+[data-layout="a"] .menu ul {
+    display: grid;
+    gap: min(calc(var(--word) * 0.55), 1.1vh);
+}
+[data-layout="a"] .item {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: baseline;
+    column-gap: 1.2em;
+    width: min(40em, 100%);
+}
+[data-layout="a"] .word { text-align: right; }
+[data-layout="a"] .sub  { text-align: left; }
+[data-layout="a"] .menu ul { width: min(40em, calc(100vw - 2 * var(--r))); }
+[data-layout="a"] .item { width: 100%; }
+
+@media (orientation: portrait), (max-width: 700px) {
+    [data-layout="a"] .safe { gap: calc(var(--word) * 1.6); }
+    [data-layout="a"] .menu ul { width: auto; gap: calc(var(--word) * 0.8); text-align: center; }
+    [data-layout="a"] .item { display: flex; align-items: center; }
+    [data-layout="a"] .word, [data-layout="a"] .sub { text-align: center; }
+}
+
+/* ============================================================
+   B — «Разворот»: слева знак, справа список.
+   Подпись под словом. Узкий экран: знак сверху, список ниже,
+   всё по левому краю.
+   ============================================================ */
+[data-layout="b"] .safe {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: calc(var(--word) * 3);
+    align-items: center;
+}
+[data-layout="b"] .brand {
+    justify-self: end;
+    display: grid;
+    justify-items: end;
+    text-align: right;
+    gap: calc(var(--word) * 0.5);
+}
+[data-layout="b"] .logo { height: calc(var(--mark) * 2.6); margin-bottom: calc(var(--word) * 0.5); }
+[data-layout="b"] .menu ul {
+    display: grid;
+    gap: calc(var(--word) * 0.75);
+}
+
+@media (orientation: portrait), (max-width: 700px) {
+    [data-layout="b"] .safe {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto auto;
+        align-content: center;
+        row-gap: calc(var(--word) * 2);
+    }
+    [data-layout="b"] .brand {
+        justify-self: start;
+        justify-items: start;
+        text-align: left;
+    }
+    /* надпись может выйти за безопасную зону, но не за экран */
+    [data-layout="b"] .wordmark { font-size: min(var(--mark), calc((100vw - var(--r) - 16px) / 10)); }
+    [data-layout="b"] .logo { height: calc(var(--mark) * 1.6); margin: 0 0 calc(var(--word) * 0.3); }
+    [data-layout="b"] .menu ul { gap: calc(var(--word) * 0.85); }
+}
+
+/* ============================================================
+   C — «Россыпь»: знак в центре, слова разнесены по краям
+   безопасной зоны. Дыре есть где открыться в любой части листа.
+   Узкий экран: колонка со знаком посередине, слова попеременно
+   у левого и правого края.
+   ============================================================ */
+[data-layout="c"] .brand {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    display: grid;
+    justify-items: center;
+    text-align: center;
+    gap: calc(var(--word) * 0.5);
+}
+[data-layout="c"] .menu,
+[data-layout="c"] .menu ul { position: absolute; inset: 0; }
+[data-layout="c"] .menu li { position: absolute; max-width: 14em; }
+[data-layout="c"] .menu li:nth-child(1) { left: 0;   top: 0; }
+[data-layout="c"] .menu li:nth-child(2) { right: 0;  top: 0;    text-align: right; }
+[data-layout="c"] .menu li:nth-child(3) { left: 0;   top: 50%;  transform: translateY(-50%); }
+[data-layout="c"] .menu li:nth-child(4) { right: 0;  top: 50%;  transform: translateY(-50%); text-align: right; }
+[data-layout="c"] .menu li:nth-child(3),
+[data-layout="c"] .menu li:nth-child(4) { max-width: 9em; }  /* не наезжать на знак */
+[data-layout="c"] .menu li:nth-child(5) { left: 0;   bottom: 0; }
+[data-layout="c"] .menu li:nth-child(6) { left: 50%; bottom: 0; transform: translateX(-50%); text-align: center; }
+[data-layout="c"] .menu li:nth-child(7) { right: 0;  bottom: 0; text-align: right; }
+
+@media (orientation: portrait), (max-width: 700px) {
+    [data-layout="c"] .safe {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+    [data-layout="c"] .brand { position: static; transform: none; order: 0; }
+    [data-layout="c"] .menu,
+    [data-layout="c"] .menu ul { display: contents; }
+    [data-layout="c"] .menu li:nth-child(n) {
+        position: static; transform: none; max-width: 80%;
+        text-align: left; align-self: flex-start;
+    }
+    [data-layout="c"] .menu li:nth-child(even) { text-align: right; align-self: flex-end; }
+    /* три слова над знаком, четыре под ним */
+    [data-layout="c"] .menu li:nth-child(-n+3) { order: -1; }
+    [data-layout="c"] .menu li:nth-child(n+4)  { order: 1; }
+}
+
+/* ============================================================
+   ?debug — безопасная зона и размер дыры
+   ============================================================ */
+.debug .safe { outline: 1px dashed #f0f; }
+.debug .sheet::after {
+    content: "";
+    position: absolute;
+    left: 0; top: 0;
+    width: calc(var(--r) * 2); height: calc(var(--r) * 2);
+    margin: calc(var(--r) * -1) 0 0 calc(var(--r) * -1);
+    translate: var(--r) var(--r);
+    border-radius: 50%;
+    outline: 1px dashed #f0f;
+    pointer-events: none;
+}
+.debug .item { outline: 1px dotted #0bf; }
+
+/* Широкие колонки остаются частью вёрстки. Зона прокола измеряется по тексту. */
+[data-layout="a"].tear-ready .word { justify-self: end; }
+[data-layout="a"].tear-ready .sub { justify-self: start; }
+
+.tear {
+    position: fixed;
+    z-index: 1;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    outline: none;
+}
+.tear-bed {
+    position: absolute;
+    left: 0;
+    top: 0;
+    translate: -50% -50%;
+    width: var(--bed-size);
+    height: var(--bed-size);
+    background: #101010;
+    border-radius: 50%;
+    overflow: hidden;
+    pointer-events: auto;
+    display: grid;
+    place-items: center;
+}
+.tear-preview {
+    display: grid;
+    place-content: center;
+    justify-items: end;
+    width: 100%;
+    height: 100%;
+    color: #eee;
+    text-decoration: none;
+}
+.tear-preview img {
+    grid-area: 1 / 1;
+    width: calc(var(--unit) * .93);
+    height: calc(var(--unit) * .93);
+    object-fit: contain;
+}
+.tear-preview span {
+    grid-area: 1 / 1;
+    align-self: end;
+    justify-self: end;
+    padding: .25em .45em;
+    background: #101010;
+    font: 500 clamp(10px, calc(var(--unit) * .067), 14px)/1 "Satoshi", sans-serif;
+    letter-spacing: .03em;
+}
+.tear-preview:focus-visible span { outline: 1px solid currentColor; outline-offset: 2px; }
+.tear canvas { pointer-events: none; }
+.tear.static .tear-bed { width: calc(2 * var(--unit)); height: calc(2 * var(--unit)); }
+.tear.healing .tear-bed, .tear.healing .tear-preview { pointer-events: none; }
+
+@media (pointer: fine) {
+    html.tear-ready, .tear-ready [data-preview] {
+        cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Ccircle cx='6' cy='6' r='2.5' fill='black' stroke='white' stroke-width='.8'/%3E%3C/svg%3E") 6 6, crosshair;
+    }
+    html.tear-open, .tear-open .tear-bed, .tear-open .tear-preview { cursor: crosshair; }
+    html.over-preview .tear-bed, html.over-preview .tear-preview { cursor: pointer; }
+}
