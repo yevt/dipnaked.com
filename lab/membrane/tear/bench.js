@@ -91,6 +91,7 @@ wind.add(jetAngle, 'degrees', 15, 80, 1).name('Полуугол струи, °')
 });
 wind.close();
 const sheetSettings = gui.addFolder('Материал и время');
+slider(sheetSettings, 'petalCount', 'Лепестки', 3, 6, 1);
 slider(sheetSettings, 'prickRadius', 'Радиус прокола', 0.03, 0.2, 0.01);
 slider(sheetSettings, 'tearStrain', 'Порог разрыва', 0.05, 3, 0.01);
 slider(sheetSettings, 'memoryStiffness', 'Упругость возврата', 4, 60, 0.5);

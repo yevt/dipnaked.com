@@ -4,7 +4,7 @@ const DT = 1 / 120;
 export const PATCH_RADIUS = 4;
 export const tearDefaults = Object.freeze({
     wind: 45, nozzleRadius: 0.75, coneSlope: 1.3, shear: 0.35,
-    tearStrain: 0.6,
+    tearStrain: 0.6, petalCount: 4,
     memoryStiffness: 30, drag: 8.5, prickRadius: 0.075, pressDuration: 0.15,
     shrinkDuration: 1.2,
     rings: 34, segments: 56,
@@ -221,14 +221,14 @@ export class TearSolver {
     }
 
     prick() {
-        // The three edges of a small pointed tip start short cuts within its
+        // The edges of a small pointed tip start short cuts within its
         // footprint. Their eventual length follows hoop tension at each tip.
-        const { segments, seed } = this.options;
+        const { segments, seed, petalCount } = this.options;
         const rng = mulberry32(seed + 4711);
         const azimuth = rng() * segments;
         const starts = new Set();
-        for (let n = 0; n < 3; n++) {
-            starts.add(Math.floor(azimuth + (n + 0.3 * rng()) * segments / 3) % segments);
+        for (let n = 0; n < petalCount; n++) {
+            starts.add(Math.floor(azimuth + (n + 0.3 * rng()) * segments / petalCount) % segments);
         }
         for (let i = 0; i < this.seams.length; i++) {
             const seam = this.seams[i];
@@ -428,15 +428,13 @@ export class TearSolver {
     }
 
     updateSeams() {
-        // The closing sheet keeps its existing cuts until it is nearly flat.
-        // That avoids projecting separated banks together during the return.
-        if (this.closing) return;
-        const { pos, prev, seams, constraints } = this;
+        const { pos, prev, seams, constraints, closing } = this;
         // Inspect outer tips first: stress can advance a crack only from an
         // existing opening. Intact material away from a tip stays connected.
         for (let i = seams.length - 1; i >= 0; i--) {
             const seam = seams[i], a = seam.ja, b = seam.jb;
             if (!seam.broken) {
+                if (closing) continue;
                 if (seam.inner < 0 || !seams[seam.inner].broken) continue;
                 const tensile = 0.5 * (constraints[seam.hoopA].strain + constraints[seam.hoopB].strain);
                 if (tensile > this.options.tearStrain * seam.threshold) {
@@ -449,14 +447,16 @@ export class TearSolver {
             }
             const x = pos[b] - pos[a], y = pos[b + 1] - pos[a + 1], z = pos[b + 2] - pos[a + 2];
             const vx = x - prev[b] + prev[a], vy = y - prev[b + 1] + prev[a + 1], vz = z - prev[b + 2] + prev[a + 2];
-            const weldDistance = 0.12 * seam.gauge;
+            // Rejoin touching banks during the same closing motion. Keeping
+            // subpixel gaps open would leave long hairline cracks afterwards.
+            const weldDistance = closing ? 1 / this.pixelsPerUnit : 0.12 * seam.gauge;
             if (x * x + y * y + z * z > weldDistance * weldDistance ||
-                vx * vx + vy * vy + vz * vz > (0.2 * DT) ** 2) {
+                (!closing && vx * vx + vy * vy + vz * vz > (0.2 * DT) ** 2)) {
                 seam.contactTime = 0;
                 continue;
             }
             seam.contactTime += DT;
-            if (seam.contactTime >= 0.12) {
+            if (closing || seam.contactTime >= 0.12) {
                 seam.broken = false;
                 seam.contactTime = 0;
                 this.brokenCount--;
@@ -468,7 +468,9 @@ export class TearSolver {
 
     checkRest() {
         const { pos, home } = this;
-        const tolerance2 = (2 / this.pixelsPerUnit) ** 2;
+        // Finish the small remaining folds while the opening is still closing,
+        // before the spring return slows into a separate thin-crack tail.
+        const tolerance2 = Math.max(2 / this.pixelsPerUnit, 0.2) ** 2;
         for (let j = 0; j < pos.length; j += 3) {
             const dx = pos[j] - home[j], dy = pos[j + 1], dz = pos[j + 2] - home[j + 2];
             if (dx * dx + dy * dy + dz * dz > tolerance2) return;
@@ -479,8 +481,7 @@ export class TearSolver {
             const dx = pos[b] - pos[a], dy = pos[b + 1] - pos[a + 1], dz = pos[b + 2] - pos[a + 2];
             if (dx * dx + dy * dy + dz * dz > tolerance2) return;
         }
-        // The visible return is complete. Finish its sub-two-pixel remainder
-        // in one short linear movement, then return an exactly flat page.
+        // Continue straight to the flat page in the existing final movement.
         this.settleFrom = pos.slice();
         this.settleProgress = 0;
         this.phase = 'settle';
