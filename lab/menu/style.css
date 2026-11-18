@@ -20,10 +20,39 @@
     --vmin:   min(100vw, 100vh);
     --r:      calc(var(--vmin) * 0.25);
 
-    --gutter: clamp(1rem, 4vw, 4rem);
-    --word:   clamp(1.375rem, 1.125rem + 0.8vw, 1.75rem);
-    --subsz:  clamp(1rem, 0.9rem + 0.25vw, 1.125rem);
-    --mark:   min(clamp(2rem, 4.8vw, 3.5rem), calc((100vw - 2 * var(--gutter)) / 10.2));
+    --step: .25rem;
+    --item-gap: calc(5 * var(--step));
+    --section-gap: calc(10 * var(--step));
+    --gutter: calc(4 * var(--step));
+    --logo-height: calc(10 * var(--step));
+    --mark: calc(7 * var(--step));
+    --word: 1.375rem;
+    --word-line: calc(8 * var(--step));
+    --subsz: 1rem;
+    --sub-line: calc(5 * var(--step));
+}
+@media (min-width: 22.5em) {
+    :root { --mark: calc(8 * var(--step)); }
+}
+@media (min-width: 40em) {
+    :root {
+        --gutter: calc(8 * var(--step));
+        --logo-height: calc(14 * var(--step));
+        --mark: calc(12 * var(--step));
+        --word: 1.5rem;
+        --word-line: calc(9 * var(--step));
+        --subsz: 1.125rem;
+        --sub-line: calc(6 * var(--step));
+    }
+}
+@media (min-width: 64em) {
+    :root {
+        --gutter: calc(12 * var(--step));
+        --logo-height: calc(18 * var(--step));
+        --mark: calc(14 * var(--step));
+        --word: calc(7 * var(--step));
+        --word-line: calc(10 * var(--step));
+    }
 }
 @supports (height: 100dvh) {
     :root { --vmin: min(100vw, 100dvh); }
@@ -52,10 +81,18 @@ img { display: block; }
     width: min(100%, 78rem);
     min-height: 100dvh;
     margin-inline: auto;
-    padding: clamp(1.25rem, 4vh, 3rem) var(--gutter);
+    padding: calc(6 * var(--step)) var(--gutter);
 }
 
 /* ---------- элементы ---------- */
+.brand {
+    display: grid;
+    row-gap: var(--step);
+}
+.menu ul {
+    display: grid;
+    row-gap: var(--item-gap);
+}
 .wordmark, .word {
     font-family: "Black Square", sans-serif;
     font-variation-settings: "FILL" 0, "ROND" 100;
@@ -64,19 +101,21 @@ img { display: block; }
     font-synthesis: none;
 }
 .wordmark {
-    font-size: var(--mark);
-    line-height: 1.2;
+    font-size: min(var(--mark), calc((100vw - 2 * var(--gutter)) / 10.2));
+    line-height: var(--mark);
     letter-spacing: 0.02em;
 }
 .slogan {
     font-size: var(--subsz);
+    line-height: var(--sub-line);
     font-weight: 400;
     letter-spacing: 0.3ch;
     color: var(--faint);
 }
 .logo {
     width: auto;
-    height: calc(var(--mark) * 1.6);
+    height: var(--logo-height);
+    margin-block-end: calc(2 * var(--step));
 }
 
 .item {
@@ -84,62 +123,54 @@ img { display: block; }
     text-decoration: none;
     display: inline-flex;
     flex-direction: column;
-    gap: 0.15em;
+    vertical-align: top;
     max-width: 100%;
 }
 .word {
     font-size: var(--word);
-    line-height: 1.3;
+    /* Буквы Black Square занимают весь кегль. Половина интерлиньяжа
+       снизу и верхнее поле подписи вместе дают просвет как при переносе. */
+    line-height: var(--word-line);
     letter-spacing: 0.015em;
+    overflow-wrap: anywhere;
 }
 .sub {
     font-size: var(--subsz);
     font-weight: 400;
-    line-height: 1.4;
+    line-height: var(--sub-line);
+    text-wrap: balance;
     color: var(--sub);
 }
 .item:focus-visible { outline: 1px solid var(--ink); outline-offset: 4px; }
 
 /* ============================================================
    A — «Колонка»: всё по центру одной осью.
-   Десктоп: слово | подпись в две колонки от общей оси.
-   Узкий экран: подпись под словом.
+   Подпись под словом. На широком экране — рядом с ним.
    ============================================================ */
 [data-layout="a"] .safe {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: clamp(1.5rem, 4vh, 3rem);
+    gap: var(--section-gap);
 }
-[data-layout="a"] .logo { height: calc(var(--mark) * 1.3); }
 [data-layout="a"] .brand {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.5rem;
+    justify-items: center;
     text-align: center;
 }
-[data-layout="a"] .menu ul {
-    display: grid;
-    gap: clamp(0.5rem, 1.5vh, 0.9rem);
-}
-[data-layout="a"] .item {
-    display: grid;
-    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-    align-items: baseline;
-    column-gap: clamp(1.5rem, 3vw, 3rem);
-}
-[data-layout="a"] .word { text-align: right; }
-[data-layout="a"] .sub  { text-align: left; }
-[data-layout="a"] .menu { width: 100%; max-width: 70rem; }
-[data-layout="a"] .menu ul { width: 100%; }
-[data-layout="a"] .item { width: 100%; }
+[data-layout="a"] .menu { width: min(100%, 70rem); text-align: center; }
+[data-layout="a"] .item { align-items: center; }
 
-@media (orientation: portrait), (max-width: 700px) {
-    [data-layout="a"] .menu ul { text-align: center; }
-    [data-layout="a"] .item { display: flex; align-items: center; }
-    [data-layout="a"] .word, [data-layout="a"] .sub { text-align: center; }
+@media (orientation: landscape) and (min-width: 70em) {
+    [data-layout="a"] .item {
+        display: grid;
+        grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+        align-items: end;
+        column-gap: calc(3 * var(--step));
+        width: 100%;
+    }
+    [data-layout="a"] .word { justify-self: end; text-align: right; }
+    [data-layout="a"] .sub  { justify-self: start; text-align: left; }
 }
 
 /* ============================================================
@@ -150,44 +181,37 @@ img { display: block; }
 [data-layout="b"] .safe {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    column-gap: calc(var(--word) * 3);
+    column-gap: var(--section-gap);
     align-items: center;
 }
 [data-layout="b"] .brand {
     justify-self: end;
-    display: grid;
     justify-items: end;
     text-align: right;
-    gap: calc(var(--word) * 0.5);
-}
-[data-layout="b"] .wordmark { font-size: min(var(--mark), 3.5vw); }
-[data-layout="b"] .logo { height: calc(var(--mark) * 2.6); margin-bottom: calc(var(--word) * 0.5); }
-[data-layout="b"] .menu ul {
-    display: grid;
-    gap: calc(var(--word) * 0.75);
 }
 
-@media (orientation: portrait), (max-width: 1100px) {
+@media (orientation: landscape) and (min-width: 70em) {
+    [data-layout="b"] .brand { --mark: calc(11 * var(--step)); --logo-height: calc(36 * var(--step)); }
+    [data-layout="c"] .brand { --mark: calc(10 * var(--step)); --logo-height: calc(22 * var(--step)); }
+}
+@media (orientation: portrait), (width < 70em) {
     [data-layout="b"] .safe {
         grid-template-columns: minmax(0, 1fr);
         grid-template-rows: auto auto;
         align-content: center;
-        row-gap: calc(var(--word) * 2);
+        row-gap: var(--section-gap);
     }
     [data-layout="b"] .brand {
         justify-self: start;
         justify-items: start;
         text-align: left;
     }
-    [data-layout="b"] .wordmark { font-size: var(--mark); }
-    [data-layout="b"] .logo { height: calc(var(--mark) * 1.6); margin: 0 0 calc(var(--word) * 0.3); }
-    [data-layout="b"] .menu ul { gap: calc(var(--word) * 0.85); }
 }
 
 /* ============================================================
    C — «Россыпь»: знак в центре, слова разнесены по краям
    безопасной зоны. Дыре есть где открыться в любой части листа.
-   Узкий экран: колонка со знаком посередине, слова попеременно
+   Узкий экран: шапка над списком, слова попеременно
    у левого и правого края.
    ============================================================ */
 [data-layout="c"] .brand {
@@ -195,12 +219,9 @@ img { display: block; }
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%);
-    display: grid;
     justify-items: center;
     text-align: center;
-    gap: calc(var(--word) * 0.5);
 }
-[data-layout="c"] .wordmark { font-size: min(var(--mark), 3.2vw); }
 [data-layout="c"] .menu,
 [data-layout="c"] .menu ul { position: absolute; inset: 0; }
 [data-layout="c"] .menu { inset: var(--gutter); }
@@ -213,25 +234,21 @@ img { display: block; }
 [data-layout="c"] .menu li:nth-child(6) { left: 50%; bottom: 0; transform: translateX(-50%); text-align: center; }
 [data-layout="c"] .menu li:nth-child(7) { right: 0;  bottom: 0; text-align: right; }
 
-@media (orientation: portrait), (max-width: 1100px) {
+@media (orientation: portrait), (width < 70em) {
     [data-layout="c"] .safe {
         display: flex;
         flex-direction: column;
         justify-content: center;
-        gap: 1.25rem;
+        gap: var(--section-gap);
     }
-    [data-layout="c"] .brand { position: static; transform: none; order: 0; }
-    [data-layout="c"] .wordmark { font-size: var(--mark); }
+    [data-layout="c"] .brand { position: static; transform: none; }
     [data-layout="c"] .menu,
-    [data-layout="c"] .menu ul { display: contents; }
+    [data-layout="c"] .menu ul { position: static; }
     [data-layout="c"] .menu li:nth-child(n) {
         position: static; transform: none; max-width: 100%;
-        text-align: left; align-self: flex-start;
+        text-align: left;
     }
-    [data-layout="c"] .menu li:nth-child(even) { text-align: right; align-self: flex-end; }
-    /* три слова над знаком, четыре под ним */
-    [data-layout="c"] .menu li:nth-child(-n+3) { order: -1; }
-    [data-layout="c"] .menu li:nth-child(n+4)  { order: 1; }
+    [data-layout="c"] .menu li:nth-child(even) { text-align: right; }
 }
 
 /* ============================================================
@@ -250,10 +267,6 @@ img { display: block; }
     pointer-events: none;
 }
 .debug .item { outline: 1px dotted #0bf; }
-
-/* Широкие колонки остаются частью вёрстки. Зона прокола измеряется по тексту. */
-[data-layout="a"].tear-ready .word { justify-self: end; }
-[data-layout="a"].tear-ready .sub { justify-self: start; }
 
 .tear {
     position: fixed;
