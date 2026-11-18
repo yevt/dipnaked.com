@@ -1,5 +1,6 @@
 import { TearSolver } from '../membrane/tear/solver.js';
 import { createTearRenderer } from '../membrane/tear/renderer.js';
+import { addPreview } from './preview.js';
 
 const sheet = document.querySelector('.sheet');
 const root = document.documentElement;
@@ -75,6 +76,17 @@ function reset() {
     frame = 0;
 }
 
+function onScroll() {
+    // Focusing a menu item may queue a scroll event before Enter opens it.
+    // Discard a snapshot only if the sheet has moved since that snapshot.
+    const moved = patch => patch && (patch.scrollX !== window.scrollX || patch.scrollY !== window.scrollY);
+    if (moved(active)) reset();
+    else if (moved(healing)) {
+        removePatch(healing);
+        healing = null;
+    }
+}
+
 function uncovered(patch, x, y) {
     if (patch.renderer) return !patch.renderer.covers(x, y);
     return Math.hypot(x - patch.cx, y - patch.cy) < patch.unit;
@@ -99,11 +111,11 @@ function hitsLinkText(anchor, x, y) {
 }
 
 function openPatch(cx, cy, trigger, preview) {
-    const unit = Math.min(sheet.clientWidth, sheet.clientHeight) / 4;
+    const unit = Math.min(root.clientWidth, root.clientHeight) / 4;
     const element = document.createElement('section');
     element.className = 'tear';
     element.tabIndex = -1;
-    element.setAttribute('aria-label', preview ? 'Превью ' + trigger.dataset.preview : 'Разрыв листа');
+    element.setAttribute('aria-label', preview ? trigger.querySelector('.word').textContent : 'Разрыв листа');
     element.style.setProperty('--unit', unit + 'px');
     element.style.left = cx + 'px';
     element.style.top = cy + 'px';
@@ -111,26 +123,13 @@ function openPatch(cx, cy, trigger, preview) {
     bed.className = 'tear-bed';
     element.append(bed);
 
-    let link;
-    if (preview) {
-        link = document.createElement('a');
-        link.className = 'tear-preview';
-        link.href = trigger.href;
-        link.setAttribute('aria-label', trigger.dataset.preview + ' — ' + preview.caption);
-        const image = new Image();
-        image.src = preview.src;
-        image.alt = preview.alt;
-        const label = document.createElement('span');
-        label.textContent = preview.caption;
-        link.append(image, label);
-        bed.append(link);
-    }
-
     const patch = {
-        element, trigger, cx, cy, unit, link, solver: null, renderer: null,
+        element, trigger, cx, cy, unit, solver: null, renderer: null,
+        scrollX: window.scrollX, scrollY: window.scrollY,
         returnFocus: trigger || document.activeElement
     };
     document.body.append(element);
+    if (preview) addPreview(bed, preview, trigger, cx, cy, unit);
     if (!reducedMotion.matches) {
         const canvas = document.createElement('canvas');
         canvas.setAttribute('aria-hidden', 'true');
@@ -165,7 +164,7 @@ function openPatch(cx, cy, trigger, preview) {
     root.classList.add('tear-open');
     sheet.inert = true;
     trigger?.setAttribute('aria-expanded', 'true');
-    (link || element).focus({ preventScroll: true });
+    (bed.querySelector('a') || element).focus({ preventScroll: true });
     if (patch.solver) wake();
 }
 
@@ -177,16 +176,15 @@ async function enableMenu() {
         const preview = previews[trigger.dataset.preview];
         if (!preview) continue;
         trigger.setAttribute('aria-expanded', 'false');
-        new Image().src = preview.src;
+        if (preview.src) new Image().src = preview.src;
     }
     root.classList.add('tear-ready');
 
     document.addEventListener('click', event => {
         if (event.defaultPrevented || event.button !== 0) return;
         if (active) {
-            // Keyboard activation has no screen coordinates. The preview is the
-            // only focusable link while the sheet is inert.
-            if (event.detail === 0 && active.link?.contains(event.target)) return;
+            // Keyboard activation of a content link has no pointer coordinates.
+            if (event.detail === 0 && active.element.contains(event.target.closest('a[href]'))) return;
             if (uncovered(active, event.clientX, event.clientY)) return;
             event.preventDefault();
             event.stopPropagation();
@@ -201,7 +199,9 @@ async function enableMenu() {
         if (trigger && !preview) return;
         event.preventDefault();
         if (trigger && event.detail === 0) {
-            const word = textRange(trigger.querySelector('.word') || trigger).getBoundingClientRect();
+            const label = trigger.querySelector('.word') || trigger;
+            label.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+            const word = textRange(label).getBoundingClientRect();
             openPatch(word.x + word.width / 2, word.y + word.height / 2, trigger, preview);
         } else {
             openPatch(event.clientX, event.clientY, trigger, preview);
@@ -209,7 +209,7 @@ async function enableMenu() {
     }, true);
 
     document.addEventListener('auxclick', event => {
-        if (event.button === 1 && active?.link?.contains(event.target) &&
+        if (event.button === 1 && active?.element.contains(event.target.closest('a[href]')) &&
             !uncovered(active, event.clientX, event.clientY)) event.preventDefault();
     }, true);
 
@@ -220,10 +220,12 @@ async function enableMenu() {
         }
     });
     document.addEventListener('pointermove', event => {
-        if (!active?.link || event.pointerType === 'touch') return;
-        root.classList.toggle('over-preview', uncovered(active, event.clientX, event.clientY));
+        if (!active || event.pointerType === 'touch') return;
+        const link = event.target.closest('a[href]');
+        root.classList.toggle('over-preview', active.element.contains(link) && uncovered(active, event.clientX, event.clientY));
     }, { passive: true });
     window.addEventListener('resize', reset);
+    window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('pagehide', reset);
     reducedMotion.addEventListener('change', reset);
     document.fonts.addEventListener('loadingdone', () => {

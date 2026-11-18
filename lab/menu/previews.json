@@ -1,8 +1,57 @@
 {
+    "streaming": {
+        "type": "services",
+        "services": [
+            { "name": "Spotify", "shape": "round", "href": "https://open.spotify.com/artist/5x1f95Qpvhruom1A7cyjxF", "icon": "/assets/icons/spotify.svg" },
+            { "name": "Яндекс Музыка", "href": "https://music.yandex.ru/artist/22069421", "icon": "/assets/icons/yandexmusic.png" },
+            { "name": "Apple Music", "href": "https://music.apple.com/md/artist/dipnaked/1733917933", "icon": "/assets/icons/applemusic.svg" },
+            { "name": "YouTube Music", "shape": "round", "href": "https://music.youtube.com/channel/UCBxLx6ozyCb0p3L0XVZ1_3Q", "icon": "/assets/icons/ytmusic.png" },
+            { "name": "VK Музыка", "href": "https://vk.com/artist/dipnaked", "icon": "/assets/icons/vk.svg" },
+            { "name": "Amazon Music", "href": "https://music.amazon.com/artists/B0CXN1TXQV/dipnaked", "icon": "assets/amazon-music-icon.webp" },
+            { "name": "SoundCloud", "href": "https://soundcloud.com/dipnaked-music", "icon": "assets/soundcloud-icon.webp" },
+            { "name": "Deezer", "href": "https://www.deezer.com/us/artist/258018432", "icon": "assets/deezer-icon.webp" },
+            { "name": "TIDAL", "opticalOffset": [-0.045, -0.08], "href": "https://tidal.com/artist/46288640", "icon": "assets/tidal-icon.webp" }
+        ]
+    },
+    "youtube": {
+        "type": "image",
+        "src": "assets/youtube-no-reason.webp",
+        "alt": "no reason to rejoice — руки за клавишами синтезатора",
+        "caption": "youtube ↗",
+        "href": "https://youtube.com/shorts/nUqXQwyp2mA?feature=share"
+    },
     "snailstrobe": {
         "type": "image",
         "src": "assets/snailstrobe.webp",
         "alt": "Абстрактный рисунок с красной дугой и зелёной волной",
+        "caption": "instagram ↗",
+        "size": "compact"
+    },
+    "peek10x": {
+        "type": "image",
+        "src": "assets/peek10x-window.webp",
+        "alt": "Чёрно-белый портрет в окне автомобиля с отражением деревьев",
         "caption": "instagram ↗"
+    },
+    "debility.records": {
+        "type": "image",
+        "src": "assets/debility-one-take.webp",
+        "alt": "1000 и один тейк — запись вокала у микрофона",
+        "caption": "youtube ↗",
+        "href": "https://youtu.be/mJgmCCXAnk0"
+    },
+    "lab": {
+        "type": "image",
+        "src": "assets/h-girl-light.webp",
+        "alt": "H-Girl — освещённая картина, красная кнопка и открытое меню настроек",
+        "href": "/lab/h-girl/",
+        "caption": "lab ↗",
+        "sectionLabel": "Все опыты в lab"
+    },
+    "telegram": {
+        "type": "text",
+        "text": "Я понимаю на сайте 0 контента и кроме меню нет ничего больше. Но по факту так и есть.",
+        "caption": "telegram ↗",
+        "href": "https://t.me/dipnaked/34"
     }
 }

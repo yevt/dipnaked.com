@@ -4,9 +4,9 @@ const DT = 1 / 120;
 export const PATCH_RADIUS = 4;
 export const tearDefaults = Object.freeze({
     wind: 45, nozzleRadius: 0.75, coneSlope: 1.3, shear: 0.35,
-    tearStrain: 0.6, petalCount: 4,
+    tearStrain: 0.6, petalCount: 0, // 0 chooses 4–6 cuts for each seed.
     memoryStiffness: 30, drag: 8.5, prickRadius: 0.075, pressDuration: 0.15,
-    shrinkDuration: 1.2,
+    shrinkDuration: 1.2, settleDuration: 0.25,
     rings: 34, segments: 56,
 });
 
@@ -225,14 +225,21 @@ export class TearSolver {
         // footprint. Their eventual length follows hoop tension at each tip.
         const { segments, seed, petalCount } = this.options;
         const rng = mulberry32(seed + 4711);
-        const azimuth = rng() * segments;
-        const starts = new Set();
-        for (let n = 0; n < petalCount; n++) {
-            starts.add(Math.floor(azimuth + (n + 0.3 * rng()) * segments / petalCount) % segments);
+        const count = petalCount || 4 + Math.floor(rng() * 3);
+        // Positive, unequal sectors avoid both a regular star and clustered cuts.
+        const widths = Array.from({ length: count }, () => 0.6 + 0.8 * rng());
+        const total = widths.reduce((sum, width) => sum + width, 0);
+        let azimuth = rng() * segments;
+        const starts = new Map();
+        for (const width of widths) {
+            const length = this.options.prickRadius * (0.7 + 0.6 * rng());
+            starts.set(Math.floor(azimuth) % segments, length);
+            azimuth += segments * width / total;
         }
         for (let i = 0; i < this.seams.length; i++) {
             const seam = this.seams[i];
-            if (starts.has(i % segments) && this.radius[seam.a] <= this.options.prickRadius) {
+            const length = starts.get(i % segments);
+            if (length !== undefined && this.radius[seam.a] <= length) {
                 seam.broken = true;
                 this.brokenCount++;
             }
@@ -481,7 +488,16 @@ export class TearSolver {
             const dx = pos[b] - pos[a], dy = pos[b + 1] - pos[a + 1], dz = pos[b + 2] - pos[a + 2];
             if (dx * dx + dy * dy + dz * dz > tolerance2) return;
         }
-        // Continue straight to the flat page in the existing final movement.
+        // Match the current inward speed before bringing it gently to zero.
+        // A slope in [0, 3] keeps the cubic monotone, with no overshoot.
+        let distance2 = 0, inwardSpeed = 0;
+        for (let j = 0; j < pos.length; j++) {
+            const delta = pos[j] - home[j];
+            distance2 += delta * delta;
+            inwardSpeed += delta * (this.prev[j] - pos[j]) / DT;
+        }
+        this.settleSlope = distance2 > 0
+            ? Math.max(0, Math.min(3, this.options.settleDuration * inwardSpeed / distance2)) : 0;
         this.settleFrom = pos.slice();
         this.settleProgress = 0;
         this.phase = 'settle';
@@ -489,13 +505,14 @@ export class TearSolver {
     }
 
     settle() {
-        const progress = Math.min(1, this.phaseTime / 0.14);
+        const time = Math.min(1, this.phaseTime / this.options.settleDuration);
+        const progress = smooth(time) + this.settleSlope * time * (1 - time) ** 2;
         this.settleProgress = progress;
         for (let j = 0; j < this.pos.length; j++) {
             this.prev[j] = this.pos[j];
             this.pos[j] = this.home[j] + (1 - progress) * (this.settleFrom[j] - this.home[j]);
         }
-        if (progress < 1) return;
+        if (time < 1) return;
         this.prev.set(this.home);
         for (const seam of this.seams) {
             seam.broken = false;

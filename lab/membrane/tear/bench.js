@@ -91,7 +91,9 @@ wind.add(jetAngle, 'degrees', 15, 80, 1).name('Полуугол струи, °')
 });
 wind.close();
 const sheetSettings = gui.addFolder('Материал и время');
-slider(sheetSettings, 'petalCount', 'Лепестки', 3, 6, 1);
+sheetSettings.add(config, 'petalCount', { 'Случайно: 4–6': 0, '3': 3, '4': 4, '5': 5, '6': 6 })
+    .name('Лепестки').onFinishChange(puncture);
+slider(sheetSettings, 'settleDuration', 'Плавный финал, с', 0.2, 0.3, 0.01);
 slider(sheetSettings, 'prickRadius', 'Радиус прокола', 0.03, 0.2, 0.01);
 slider(sheetSettings, 'tearStrain', 'Порог разрыва', 0.05, 3, 0.01);
 slider(sheetSettings, 'memoryStiffness', 'Упругость возврата', 4, 60, 0.5);
