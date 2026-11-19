@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" />
     <link rel="stylesheet" href="style.css" />
     <script type="module" src="menu.js"></script>
-    <!-- Черновик: выбор раскладки (?layout=a|b|c) и сетка безопасной зоны (?debug).
+    <!-- Черновик: выбор раскладки (?layout=a|b|c), модульная сетка (?grid) и безопасная зона (?debug).
          Убрать после того, как автор выберет раскладку. -->
     <script>
         (function () {
@@ -17,6 +17,7 @@
             var l = q.get('layout');
             if (l === 'a' || l === 'b' || l === 'c') d.dataset.layout = l;
             if (q.has('debug')) d.classList.add('debug');
+            if (q.has('grid')) d.classList.add('show-grid');
         })();
     </script>
 </head>
@@ -24,7 +25,7 @@
     <main class="sheet">
         <div class="safe">
             <header class="brand">
-                <img class="logo" src="assets/spiral-rough.svg" alt="" width="1128" height="1246" />
+                <img class="logo" src="assets/spiral-rough.svg" alt="" width="1222" height="1222" />
                 <h1 class="wordmark">dipnaked</h1>
                 <p class="slogan">in affair with the abyss</p>
             </header>

@@ -10,6 +10,18 @@
     font-display: block;
 }
 
+/* При кегле 16 px прописная системной кириллицы занимает около 12 px.
+   Метрики запасного шрифта согласованы со строкой Satoshi. */
+@font-face {
+    font-family: "Menu UI";
+    src: local("Segoe UI"), local("Roboto"), local("Helvetica Neue"), local("Arial");
+    font-weight: 400;
+    size-adjust: 107%;
+    ascent-override: 94%;
+    descent-override: 24%;
+    line-gap-override: 0%;
+}
+
 :root {
     --paper:  #fff;
     --ink:    #000;
@@ -21,38 +33,45 @@
     --r:      calc(var(--vmin) * 0.25);
 
     --step: .25rem;
-    --item-gap: calc(5 * var(--step));
-    --section-gap: calc(10 * var(--step));
+    --page-inset: calc(6 * var(--step));
     --gutter: calc(4 * var(--step));
-    --logo-height: calc(10 * var(--step));
-    --mark: calc(7 * var(--step));
-    --word: 1.375rem;
-    --word-line: calc(8 * var(--step));
-    --subsz: 1rem;
-    --sub-line: calc(5 * var(--step));
+    --logo-size: calc(10 * var(--step));
+    --mark-size: calc(7 * var(--step));
+    --logo-name-gap: calc(3 * var(--step));
+    --name-slogan-gap: var(--step);
+    --section-gap: calc(10 * var(--step));
+    --item-gap: calc(6 * var(--step));
+    --title-size: calc(6 * var(--step));
+    --title-leading: calc(2 * var(--step));
+    --caption-gap: var(--step);
+    --copy-size: calc(4 * var(--step));
+    --copy-line: calc(5 * var(--step));
+    --copy-family: "Satoshi", "Menu UI", -apple-system, "Segoe UI", sans-serif;
+
+    /* Процент в translate отсчитывается от высоты самого блока. */
+    --free-above: max(0px, calc(50dvh - 50% - var(--page-inset)));
+    --center-y: var(--free-above);
 }
 @media (min-width: 22.5em) {
-    :root { --mark: calc(8 * var(--step)); }
+    :root { --mark-size: calc(8 * var(--step)); }
 }
 @media (min-width: 40em) {
     :root {
         --gutter: calc(8 * var(--step));
-        --logo-height: calc(14 * var(--step));
-        --mark: calc(12 * var(--step));
-        --word: 1.5rem;
-        --word-line: calc(9 * var(--step));
-        --subsz: 1.125rem;
-        --sub-line: calc(6 * var(--step));
+        --logo-size: calc(14 * var(--step));
+        --mark-size: calc(12 * var(--step));
     }
 }
 @media (min-width: 64em) {
     :root {
         --gutter: calc(12 * var(--step));
-        --logo-height: calc(18 * var(--step));
-        --mark: calc(14 * var(--step));
-        --word: calc(7 * var(--step));
-        --word-line: calc(10 * var(--step));
+        --logo-size: calc(18 * var(--step));
+        --mark-size: calc(14 * var(--step));
+        --title-size: calc(7 * var(--step));
     }
+}
+@supports (width: round(1px, 1px)) {
+    :root { --center-y: round(nearest, var(--free-above), var(--step)); }
 }
 @supports (height: 100dvh) {
     :root { --vmin: min(100vw, 100dvh); }
@@ -65,7 +84,7 @@ body {
     overflow-x: clip;
     background: var(--paper);
     color: var(--ink);
-    font: 400 1rem / 1.4 "Satoshi", -apple-system, "Segoe UI", sans-serif;
+    font: 400 var(--copy-size) / var(--copy-line) var(--copy-family);
     -webkit-font-smoothing: antialiased;
 }
 ul { list-style: none; margin: 0; padding: 0; }
@@ -75,19 +94,22 @@ img { display: block; }
 .sheet {
     position: relative;
     min-height: 100dvh;
+    padding-block: var(--page-inset);
 }
 .safe {
     position: relative;
+    display: grid;
+    row-gap: var(--section-gap);
     width: min(100%, 78rem);
-    min-height: 100dvh;
     margin-inline: auto;
-    padding: calc(6 * var(--step)) var(--gutter);
+    padding-inline: var(--gutter);
+    translate: 0 var(--center-y);
 }
 
 /* ---------- элементы ---------- */
 .brand {
     display: grid;
-    row-gap: var(--step);
+    justify-items: start;
 }
 .menu ul {
     display: grid;
@@ -99,23 +121,24 @@ img { display: block; }
     font-feature-settings: "ss02" 1;
     font-weight: 400;
     font-synthesis: none;
+    text-box: trim-both cap alphabetic;
 }
 .wordmark {
-    font-size: min(var(--mark), calc((100vw - 2 * var(--gutter)) / 10.2));
-    line-height: var(--mark);
+    --fitting-mark: calc((100vw - 2 * var(--gutter)) / 10.2);
+    font-size: min(var(--mark-size), var(--fitting-mark));
+    font-size: min(var(--mark-size), max(var(--step), round(down, var(--fitting-mark), var(--step))));
+    line-height: 1;
     letter-spacing: 0.02em;
 }
 .slogan {
-    font-size: var(--subsz);
-    line-height: var(--sub-line);
-    font-weight: 400;
+    margin-block-start: var(--name-slogan-gap);
     letter-spacing: 0.3ch;
     color: var(--faint);
 }
 .logo {
-    width: auto;
-    height: var(--logo-height);
-    margin-block-end: calc(2 * var(--step));
+    width: var(--logo-size);
+    height: var(--logo-size);
+    margin-block-end: var(--logo-name-gap);
 }
 
 .item {
@@ -123,88 +146,61 @@ img { display: block; }
     text-decoration: none;
     display: inline-flex;
     flex-direction: column;
+    gap: var(--caption-gap);
     vertical-align: top;
     max-width: 100%;
 }
 .word {
-    font-size: var(--word);
-    /* Буквы Black Square занимают весь кегль. Половина интерлиньяжа
-       снизу и верхнее поле подписи вместе дают просвет как при переносе. */
-    line-height: var(--word-line);
+    font-size: var(--title-size);
+    line-height: calc(var(--title-size) + var(--title-leading));
     letter-spacing: 0.015em;
     overflow-wrap: anywhere;
 }
+/* У Black Square высота прописной равна em, поля строки симметричны. */
+@supports not (text-box: trim-both cap alphabetic) {
+    .word::before, .word::after { content: ""; display: table; }
+    .word::before { margin-block-end: calc(-0.5 * var(--title-leading)); }
+    .word::after { margin-block-start: calc(-0.5 * var(--title-leading)); }
+}
 .sub {
-    font-size: var(--subsz);
-    font-weight: 400;
-    line-height: var(--sub-line);
     text-wrap: balance;
     color: var(--sub);
 }
 .item:focus-visible { outline: 1px solid var(--ink); outline-offset: 4px; }
 
 /* ============================================================
-   A — «Колонка»: всё по центру одной осью.
-   Подпись под словом. На широком экране — рядом с ним.
+   A — «Колонка»: ширину задаёт шапка, весь текст начинается с её левого края.
    ============================================================ */
 [data-layout="a"] .safe {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+    grid-template-columns: minmax(0, max-content);
     justify-content: center;
-    gap: var(--section-gap);
+    text-align: left;
 }
-[data-layout="a"] .brand {
-    justify-items: center;
-    text-align: center;
-}
-[data-layout="a"] .menu { width: min(100%, 70rem); text-align: center; }
-[data-layout="a"] .item { align-items: center; }
-
-@media (orientation: landscape) and (min-width: 70em) {
-    [data-layout="a"] .item {
-        display: grid;
-        grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-        align-items: end;
-        column-gap: calc(3 * var(--step));
-        width: 100%;
-    }
-    [data-layout="a"] .word { justify-self: end; text-align: right; }
-    [data-layout="a"] .sub  { justify-self: start; text-align: left; }
-}
+[data-layout="a"] .logo { justify-self: center; }
+/* Надпись задаёт ширину даже при увеличенном шрифте. Слоган и меню переносятся внутри. */
+[data-layout="a"] :is(.slogan, .menu) { contain: inline-size; }
+[data-layout="a"] .slogan { justify-self: stretch; }
+[data-layout="a"] .item { align-items: flex-start; }
 
 /* ============================================================
    B — «Разворот»: слева знак, справа список.
    Подпись под словом. Узкий экран: знак сверху, список ниже,
    всё по левому краю.
    ============================================================ */
-[data-layout="b"] .safe {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    column-gap: var(--section-gap);
-    align-items: center;
-}
-[data-layout="b"] .brand {
-    justify-self: end;
-    justify-items: end;
-    text-align: right;
-}
-
 @media (orientation: landscape) and (min-width: 70em) {
-    [data-layout="b"] .brand { --mark: calc(11 * var(--step)); --logo-height: calc(36 * var(--step)); }
-    [data-layout="c"] .brand { --mark: calc(10 * var(--step)); --logo-height: calc(22 * var(--step)); }
-}
-@media (orientation: portrait), (width < 70em) {
     [data-layout="b"] .safe {
-        grid-template-columns: minmax(0, 1fr);
-        grid-template-rows: auto auto;
-        align-content: center;
-        row-gap: var(--section-gap);
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: var(--section-gap);
+        align-items: start;
+        translate: none;
     }
+    [data-layout="b"] :is(.brand, .menu) { translate: 0 var(--center-y); }
     [data-layout="b"] .brand {
-        justify-self: start;
-        justify-items: start;
-        text-align: left;
+        --mark-size: calc(11 * var(--step));
+        --logo-size: calc(36 * var(--step));
+        justify-self: end;
+        justify-items: end;
+        text-align: right;
     }
 }
 
@@ -215,40 +211,45 @@ img { display: block; }
    у левого и правого края.
    ============================================================ */
 [data-layout="c"] .brand {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
     justify-items: center;
     text-align: center;
 }
-[data-layout="c"] .menu,
-[data-layout="c"] .menu ul { position: absolute; inset: 0; }
-[data-layout="c"] .menu { inset: var(--gutter); }
-[data-layout="c"] .menu li { position: absolute; max-width: 36%; }
-[data-layout="c"] .menu li:nth-child(1) { left: 0;   top: 0; }
-[data-layout="c"] .menu li:nth-child(2) { right: 0;  top: 0;    text-align: right; }
-[data-layout="c"] .menu li:nth-child(3) { left: 0;   top: 50%;  transform: translateY(-50%); }
-[data-layout="c"] .menu li:nth-child(4) { right: 0;  top: 50%;  transform: translateY(-50%); text-align: right; }
-[data-layout="c"] .menu li:nth-child(5) { left: 0;   bottom: 0; }
-[data-layout="c"] .menu li:nth-child(6) { left: 50%; bottom: 0; transform: translateX(-50%); text-align: center; }
-[data-layout="c"] .menu li:nth-child(7) { right: 0;  bottom: 0; text-align: right; }
-
-@media (orientation: portrait), (width < 70em) {
+[data-layout="c"] .menu li:nth-child(even) { text-align: right; }
+@media (orientation: landscape) and (min-width: 70em) and (min-height: 26em) {
+    [data-layout="c"] .sheet { padding-block: 0; }
     [data-layout="c"] .safe {
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        gap: var(--section-gap);
+        display: block;
+        min-height: 100dvh;
+        min-height: round(down, 100dvh, var(--step));
+        translate: none;
     }
-    [data-layout="c"] .brand { position: static; transform: none; }
+    [data-layout="c"] .brand {
+        --mark-size: calc(10 * var(--step));
+        --logo-size: calc(22 * var(--step));
+        position: absolute;
+        left: 50%;
+        translate: -50% -50%;
+        translate: -50% round(nearest, -50%, var(--step));
+    }
+    [data-layout="c"] :is(.brand, li:nth-child(3), li:nth-child(4)) {
+        top: 50%;
+        top: round(nearest, 50%, var(--step));
+    }
     [data-layout="c"] .menu,
-    [data-layout="c"] .menu ul { position: static; }
-    [data-layout="c"] .menu li:nth-child(n) {
-        position: static; transform: none; max-width: 100%;
-        text-align: left;
+    [data-layout="c"] .menu ul { position: absolute; inset: 0; }
+    [data-layout="c"] .menu { inset: var(--gutter); }
+    [data-layout="c"] .menu li { position: absolute; max-width: 36%; }
+    [data-layout="c"] li:nth-child(1) { left: 0; top: 0; }
+    [data-layout="c"] li:nth-child(2) { right: 0; top: 0; }
+    [data-layout="c"] li:nth-child(3) { left: 0; }
+    [data-layout="c"] li:nth-child(4) { right: 0; }
+    [data-layout="c"] :is(li:nth-child(3), li:nth-child(4)) {
+        translate: 0 -50%;
+        translate: 0 round(nearest, -50%, var(--step));
     }
-    [data-layout="c"] .menu li:nth-child(even) { text-align: right; }
+    [data-layout="c"] li:nth-child(5) { left: 0; bottom: 0; }
+    [data-layout="c"] li:nth-child(6) { left: 50%; bottom: 0; translate: -50% 0; text-align: center; }
+    [data-layout="c"] li:nth-child(7) { right: 0; bottom: 0; text-align: right; }
 }
 
 /* ============================================================
@@ -267,6 +268,21 @@ img { display: block; }
     pointer-events: none;
 }
 .debug .item { outline: 1px dotted #0bf; }
+
+/* Горизонтали от начала листа. Каждая четвёртая линия темнее. */
+.show-grid .sheet::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    background-image: linear-gradient(to bottom, #46808c52 1px, transparent 1px),
+                      linear-gradient(to bottom, #46808c25 1px, transparent 1px);
+    background-size: 100% calc(4 * var(--step)), 100% var(--step);
+}
+.show-grid :is(.brand, .menu) { outline: 1px solid #48818c99; }
+.show-grid .item:where(:not(:focus-visible)) { outline: 1px dotted #48818c80; }
+.show-grid :is(.logo, .wordmark, .slogan, .word, .sub) { background-color: #31869613; }
 
 .tear {
     position: fixed;
@@ -320,18 +336,19 @@ img { display: block; }
 .tear-label {
     align-self: end;
     justify-self: end;
-    padding: .18em .38em;
+    padding: var(--step) calc(2 * var(--step));
     background: #101010;
-    font: 400 1rem/1.2 "Satoshi", sans-serif;
+    font: 400 var(--copy-size) / var(--copy-line) var(--copy-family);
     white-space: nowrap;
 }
 .tear-note {
     width: min(var(--card-width), 26ch);
     max-height: var(--card-height);
     grid-template-rows: minmax(0, auto) auto;
-    gap: .4em;
-    font-size: clamp(1rem, var(--unit) * .115, 1.5rem);
-    line-height: 1.3;
+    gap: calc(2 * var(--step));
+    font-size: var(--copy-size);
+    font-size: clamp(var(--copy-size), round(nearest, calc(var(--unit) * .115), var(--step)), calc(6 * var(--step)));
+    line-height: calc(1em + var(--step));
     text-align: left;
 }
 .tear-note p {
