@@ -1,5 +1,4 @@
-import { PATCH_RADIUS, TearSolver } from '../membrane/tear/solver.js';
-import { captureCutSurface } from '../membrane/tear/cut-surface.js';
+import { TearSolver } from '../membrane/tear/solver.js';
 import { createTearRenderer } from '../membrane/tear/renderer.js';
 import { addPreview } from './preview.js';
 import { alternateDisplayType } from './display-type.js';
@@ -137,14 +136,13 @@ function openPatch(cx, cy, trigger, preview) {
         canvas.setAttribute('aria-hidden', 'true');
         element.append(canvas);
         try {
-            const surface = captureCutSurface(sheet, cx, cy, unit, PATCH_RADIUS);
             const solver = new TearSolver({
                 seed: crypto.getRandomValues(new Uint32Array(1))[0],
-                pixelsPerUnit: unit, cutouts: surface.mask,
+                pixelsPerUnit: unit,
             });
             const size = 2 * unit * solver.radiusUnits;
             element.style.setProperty('--bed-size', size * 0.98 + 'px');
-            patch.renderer = createTearRenderer(canvas, solver, { sheet, surface, cx, cy, size });
+            patch.renderer = createTearRenderer(canvas, solver, { sheet, cx, cy, size });
             patch.solver = solver;
             canvas.addEventListener('webglcontextlost', () => {
                 if (active !== patch && healing !== patch) return;
@@ -231,8 +229,12 @@ async function enableMenu() {
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('pagehide', reset);
     reducedMotion.addEventListener('change', reset);
-    document.fonts.addEventListener('loadingdone', reset);
-    sheet.querySelector('.logo').addEventListener('load', reset);
+    function refreshPrint() {
+        active?.renderer?.refreshTexture();
+        healing?.renderer?.refreshTexture();
+    }
+    document.fonts.addEventListener('loadingdone', refreshPrint);
+    sheet.querySelector('.logo').addEventListener('load', refreshPrint);
 }
 
 alternateDisplayType(sheet);

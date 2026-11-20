@@ -135,6 +135,14 @@ export function addPreview(bed, preview, trigger, cx, cy, unit) {
         link.append(label);
     }
     bed.append(card);
+    if (preview.sectionLabel) {
+        const tag = label.getBoundingClientRect();
+        // At a screen edge the card can be barely wider than its second link.
+        // Give the image and the section label separate tap targets there.
+        if (right - left < 2 * tag.width || bottom - top < 2 * tag.height) {
+            card.classList.add('stacked-links');
+        }
+    }
     if (preview.type === 'text') {
         const style = getComputedStyle(link);
         const available = bottom - top - label.getBoundingClientRect().height - parseFloat(style.rowGap);

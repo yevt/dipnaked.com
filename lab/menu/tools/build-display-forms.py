@@ -16,7 +16,7 @@ from fontTools.varLib.instancer import instantiateVariableFont
 MENU = Path(__file__).resolve().parents[1]
 ASSETS = MENU / "assets"
 SOURCE = ASSETS / "BlackSquare-v69.woff2"
-AXES = {"FILL": 0, "ROND": 100}
+ROUND = {"ROND": 100}
 
 
 def cycles(font):
@@ -26,7 +26,7 @@ def cycles(font):
     font.flavor = None
     font.save(stream)
     shaping_font = hb.Font(hb.Face(stream.getvalue()))
-    shaping_font.set_variations(AXES)
+    shaping_font.set_variations(ROUND)
     result = {}
     for codepoint in sorted(font.getBestCmap()):
         run = hb.Buffer()
@@ -59,7 +59,8 @@ def write_alphabets(forms):
 
 
 def write_faces(font, forms):
-    font = instantiateVariableFont(font, AXES)
+    # Keep FILL variable so titles and fine print share the same alternate outlines.
+    font = instantiateVariableFont(font, ROUND)
     # A face exposes its chosen drawings directly at their original Unicode
     # positions. DOM text and Canvas2D can both select it by font-family.
     del font["GSUB"]

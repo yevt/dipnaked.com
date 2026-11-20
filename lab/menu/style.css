@@ -5,32 +5,72 @@
     font-family: "Black Square";
     src: url("assets/BlackSquare-v69.woff2") format("woff2");
     font-weight: 400;
-    font-variation-settings: "FILL" 0, "ROND" 100;
+    font-variation-settings: "FILL" 4, "ROND" 100;
     font-display: block;
 }
 
-/* The small faces select the original ss02 glyphs by family name in both DOM and Canvas2D. */
+/* Canvas2D selects by family and weight. Both weights use the same font file
+   and select real FILL positions: 0 for fine print, 4 for headings. */
+@font-face {
+    font-family: "Black Square";
+    src: url("assets/BlackSquare-v69.woff2") format("woff2");
+    font-weight: 300;
+    font-variation-settings: "FILL" 0, "ROND" 100;
+    font-display: block;
+}
 @font-face {
     font-family: "Black Square 2";
     src: url("assets/BlackSquare-v69-form2.woff2") format("woff2");
+    font-weight: 400;
+    font-variation-settings: "FILL" 4;
+    font-display: block;
+}
+@font-face {
+    font-family: "Black Square 2";
+    src: url("assets/BlackSquare-v69-form2.woff2") format("woff2");
+    font-weight: 300;
     font-display: block;
 }
 @font-face {
     font-family: "Black Square 3";
     src: url("assets/BlackSquare-v69-form3.woff2") format("woff2");
+    font-weight: 400;
+    font-variation-settings: "FILL" 4;
+    font-display: block;
+}
+@font-face {
+    font-family: "Black Square 3";
+    src: url("assets/BlackSquare-v69-form3.woff2") format("woff2");
+    font-weight: 300;
     font-display: block;
 }
 @font-face {
     font-family: "Black Square 4";
     src: url("assets/BlackSquare-v69-form4.woff2") format("woff2");
+    font-weight: 400;
+    font-variation-settings: "FILL" 4;
+    font-display: block;
+}
+@font-face {
+    font-family: "Black Square 4";
+    src: url("assets/BlackSquare-v69-form4.woff2") format("woff2");
+    font-weight: 300;
     font-display: block;
 }
 @font-face {
     font-family: "Black Square 5";
     src: url("assets/BlackSquare-v69-form5.woff2") format("woff2");
+    font-weight: 400;
+    font-variation-settings: "FILL" 4;
     font-display: block;
 }
-.sequenced-type :is(.wordmark, .word) { font-feature-settings: normal; }
+@font-face {
+    font-family: "Black Square 5";
+    src: url("assets/BlackSquare-v69-form5.woff2") format("woff2");
+    font-weight: 300;
+    font-display: block;
+}
+.sequenced-type :is(.wordmark, .slogan, .word, .sub) { font-feature-settings: normal; }
 [data-glyph-form="2"] { font-family: "Black Square 2", "Black Square", sans-serif; }
 [data-glyph-form="3"] { font-family: "Black Square 3", "Black Square", sans-serif; }
 [data-glyph-form="4"] { font-family: "Black Square 4", "Black Square", sans-serif; }
@@ -51,8 +91,6 @@
 :root {
     --paper:  #fff;
     --ink:    #000;
-    --sub:    #666;
-    --faint:  #6e6e6e;          /* слоган */
 
     /* Размер разрыва не задаёт размер шрифта или поля страницы. */
     --vmin:   min(100vw, 100vh);
@@ -143,12 +181,13 @@ img { display: block; }
     display: grid;
     row-gap: var(--item-gap);
 }
-.wordmark, .word {
+.wordmark, .slogan, .word, .sub {
     font-family: "Black Square", sans-serif;
-    font-variation-settings: "FILL" 0, "ROND" 100;
     font-feature-settings: "ss02" 1;
-    font-weight: 400;
     font-synthesis: none;
+}
+.wordmark, .word {
+    font-weight: 400;
     text-box: trim-both cap alphabetic;
 }
 .wordmark {
@@ -158,10 +197,14 @@ img { display: block; }
     line-height: 1;
     letter-spacing: 0.02em;
 }
+.slogan, .sub {
+    color: var(--ink);
+    font-weight: 300;
+    overflow-wrap: anywhere;
+}
 .slogan {
     margin-block-start: var(--name-slogan-gap);
-    letter-spacing: 0.3ch;
-    color: var(--faint);
+    letter-spacing: .02em;
 }
 .logo-slot {
     /* The third turn extends 54.25 units beyond the 256-unit grid slot. */
@@ -208,22 +251,35 @@ img { display: block; }
 }
 .sub {
     text-wrap: balance;
-    color: var(--sub);
 }
 .item:focus-visible { outline: 1px solid var(--ink); outline-offset: 4px; }
 
 /* ============================================================
-   A — «Колонка»: ширину задаёт шапка, весь текст начинается с её левого края.
+   A — «Кромка». Ширину колонки задаёт надпись, начало строк совпадает с краем листа.
    ============================================================ */
 [data-layout="a"] .safe {
-    grid-template-columns: minmax(0, max-content);
-    justify-content: center;
+    width: 100%;
+    margin-inline: 0;
+    padding-inline: env(safe-area-inset-left, 0px) max(var(--gutter), env(safe-area-inset-right, 0px));
+    grid-template-columns: minmax(0, 1fr);
+    justify-content: start;
     text-align: left;
 }
-/* Надпись задаёт ширину даже при увеличенном шрифте. Слоган и меню переносятся внутри. */
-[data-layout="a"] :is(.slogan, .menu) { contain: inline-size; }
+/* На широком экране колонка отмеряется надписью. На узком длинные слова
+   используют доступную ширину от кромки до безопасного правого поля. */
+@media (min-width: 40em) {
+    [data-layout="a"] .safe { grid-template-columns: minmax(0, max-content); }
+    [data-layout="a"] :is(.slogan, .menu) { contain: inline-size; }
+}
 [data-layout="a"] .slogan { justify-self: stretch; }
+[data-layout="a"] .logo-slot {
+    justify-self: start;
+    /* The leftmost ink of the spiral extends 44.25 units past its 256-unit slot. */
+    margin-inline-start: calc(var(--logo-size) * 44.25 / 256);
+}
 [data-layout="a"] .item { align-items: flex-start; }
+[data-layout="a"] .sub { text-wrap: wrap; }
+[data-layout="a"] .item:focus-visible { outline-offset: -1px; }
 
 /* ============================================================
    B — «Разворот»: слева знак, справа список.
@@ -383,6 +439,11 @@ img { display: block; }
     background: #101010;
     font: 400 var(--copy-size) / var(--copy-line) var(--copy-family);
     white-space: nowrap;
+}
+.tear-card.stacked-links { row-gap: var(--step); }
+.stacked-links > .tear-label { grid-area: 2 / 1; }
+.stacked-links img {
+    max-height: calc(var(--card-height) - var(--copy-line) - 3 * var(--step));
 }
 .tear-note {
     width: min(var(--card-width), 26ch);
