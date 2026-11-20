@@ -1,54 +1,6 @@
 /* ============================================================
    Меню dipnaked — лист
    ============================================================ */
-@font-face {
-    font-family: "Black Square";
-    src: url("assets/BlackSquare-v69.woff2") format("woff2");
-    font-weight: 400;
-    font-variation-settings: "FILL" 4, "ROND" 100;
-    font-display: block;
-}
-
-@font-face {
-    font-family: "Manrope";
-    src: url("../h-girl/fonts/manrope.woff2") format("woff2");
-    font-weight: 200 800;
-    font-display: swap;
-}
-@font-face {
-    font-family: "Black Square 2";
-    src: url("assets/BlackSquare-v69-form2.woff2") format("woff2");
-    font-weight: 400;
-    font-variation-settings: "FILL" 4;
-    font-display: block;
-}
-@font-face {
-    font-family: "Black Square 3";
-    src: url("assets/BlackSquare-v69-form3.woff2") format("woff2");
-    font-weight: 400;
-    font-variation-settings: "FILL" 4;
-    font-display: block;
-}
-@font-face {
-    font-family: "Black Square 4";
-    src: url("assets/BlackSquare-v69-form4.woff2") format("woff2");
-    font-weight: 400;
-    font-variation-settings: "FILL" 4;
-    font-display: block;
-}
-@font-face {
-    font-family: "Black Square 5";
-    src: url("assets/BlackSquare-v69-form5.woff2") format("woff2");
-    font-weight: 400;
-    font-variation-settings: "FILL" 4;
-    font-display: block;
-}
-.sequenced-type :is(.wordmark, .word) { font-feature-settings: normal; }
-[data-glyph-form="2"] { font-family: "Black Square 2", "Black Square", sans-serif; }
-[data-glyph-form="3"] { font-family: "Black Square 3", "Black Square", sans-serif; }
-[data-glyph-form="4"] { font-family: "Black Square 4", "Black Square", sans-serif; }
-[data-glyph-form="5"] { font-family: "Black Square 5", "Black Square", sans-serif; }
-
 /* При кегле 16 px прописная системной кириллицы занимает около 12 px.
    Метрики запасного шрифта согласованы со строкой Satoshi. */
 @font-face {
@@ -210,7 +162,7 @@ img { display: block; }
 .logo > img { position: relative; }
 .logo-water {
     position: absolute;
-    inset: calc(50% + 3px) 0 0;
+    inset: calc(50% + var(--water-offset, 3px)) 0 0;
     overflow: hidden;
 }
 .logo-water img { position: absolute; inset: auto 0 0; }
@@ -261,17 +213,16 @@ img { display: block; }
         --page-inset: calc(14 * var(--step));
     }
 }
-/* Visible width of the tube including its stroke, in the original 256-unit slot. */
+/* The top margin is half the visible width of the spiral, on the four-pixel grid. */
 [data-layout="a"] {
     --spiral-width: calc(var(--logo-size) * 343.5 / 256);
-    --gutter: var(--spiral-width);
-    --gutter-end: calc(3 * var(--step));
+    --gutter: calc(3 * var(--step));
     --page-inset: calc(var(--spiral-width) / 2);
     --center-y: 0px;
+    --slogan-end-inset: 5px;
 }
 @supports (width: round(nearest, 1px, 1px)) {
     [data-layout="a"] {
-        --gutter: round(nearest, var(--spiral-width), var(--step));
         --page-inset: round(nearest, calc(var(--spiral-width) / 2), var(--step));
     }
 }
@@ -282,13 +233,34 @@ img { display: block; }
                     max(var(--gutter-end, var(--gutter)), env(safe-area-inset-right, 0px));
     grid-template-columns: minmax(0, 1fr);
 }
-[data-layout="a"] .logo-slot { justify-self: start; }
+[data-layout="a"] .safe {
+    width: fit-content;
+    max-width: 100%;
+    margin-inline: auto;
+    grid-template-columns: minmax(0, max-content);
+}
+@supports (left: round(nearest, 50%, 1px)) {
+    /* The column measures the ink, so its natural width can be fractional. */
+    [data-layout="a"] .safe {
+        margin-inline: 0;
+        left: round(nearest, 50%, 1px);
+        translate: round(nearest, -50%, 1px) var(--center-y);
+    }
+}
+[data-layout="a"] .menu { contain: inline-size; }
+/* The blank advance after the final d is outside the optical column. */
+[data-layout="a"] .wordmark { margin-inline-end: -.27em; }
+[data-layout="a"] .logo-slot {
+    justify-self: start;
+    margin-block-start: calc(var(--separator-gap) - 2 * var(--step) + var(--overhang));
+}
 [data-layout="a"] .logo {
     /* The SVG has 19.75 clear units to the left of the ink. Align its image
        origin to a pixel so the native and printed edges register. */
     --logo-left: calc(var(--logo-size) * -19.75 / 256);
     left: var(--logo-left);
     left: round(nearest, var(--logo-left), 1px);
+    will-change: transform;
 }
 :is([data-layout="a"], [data-layout="void"]) .item { align-items: flex-start; }
 :is([data-layout="a"], [data-layout="void"]) .sub { text-wrap: wrap; }
@@ -299,10 +271,6 @@ img { display: block; }
 /* Кромка. На широком листе ширину единственной колонки задаёт надпись. */
 @media (width < 22.5em) {
     [data-layout="a"] { --title-size: calc(5 * var(--step)); }
-}
-@media (min-width: 40em) {
-    [data-layout="a"] .safe { grid-template-columns: minmax(0, max-content); }
-    [data-layout="a"] .menu { contain: inline-size; }
 }
 
 /* Пропуск. Знак занимает паузу между четвёртой и пятой рубриками. */
@@ -492,6 +460,11 @@ img { display: block; }
 .tear-preview img.compact {
     max-width: min(var(--card-width), var(--unit) * .93);
     max-height: min(var(--card-height), var(--unit) * .93);
+}
+.tear-signature {
+    width: min(var(--card-width), var(--card-height), var(--unit) * .9, 9rem);
+    height: auto;
+    filter: invert(1);
 }
 .tear-label {
     align-self: end;

@@ -1,0 +1,63 @@
+@font-face {
+    font-family: "Black Square";
+    src: url("assets/BlackSquare-v69.woff2") format("woff2");
+    font-weight: 400;
+    font-variation-settings: "FILL" 4, "ROND" 100;
+    font-display: block;
+}
+
+@font-face {
+    font-family: "Manrope";
+    src: url("../h-girl/fonts/manrope.woff2") format("woff2");
+    font-weight: 200 800;
+    font-display: swap;
+}
+@font-face {
+    font-family: "Black Square 2";
+    src: url("assets/BlackSquare-v69-form2.woff2") format("woff2");
+    font-weight: 400;
+    font-variation-settings: "FILL" 4;
+    font-display: block;
+}
+@font-face {
+    font-family: "Black Square 3";
+    src: url("assets/BlackSquare-v69-form3.woff2") format("woff2");
+    font-weight: 400;
+    font-variation-settings: "FILL" 4;
+    font-display: block;
+}
+@font-face {
+    font-family: "Black Square 4";
+    src: url("assets/BlackSquare-v69-form4.woff2") format("woff2");
+    font-weight: 400;
+    font-variation-settings: "FILL" 4;
+    font-display: block;
+}
+@font-face {
+    font-family: "Black Square 5";
+    src: url("assets/BlackSquare-v69-form5.woff2") format("woff2");
+    font-weight: 400;
+    font-variation-settings: "FILL" 4;
+    font-display: block;
+}
+@font-face {
+    font-family: "Black Square Final D";
+    src: url("assets/BlackSquare-v69-d-turn.woff2") format("woff2");
+    font-weight: 400;
+    font-variation-settings: "FILL" 4;
+    font-display: block;
+}
+@font-face {
+    font-family: "Black Square Final D Thin";
+    src: url("assets/BlackSquare-v69-d-thin.woff2") format("woff2");
+    font-weight: 400;
+    font-variation-settings: "FILL" 4;
+    font-display: block;
+}
+.sequenced-type :is(.wordmark, .word) { font-feature-settings: normal; }
+[data-glyph-form="2"] { font-family: "Black Square 2", "Black Square", sans-serif; }
+[data-glyph-form="3"] { font-family: "Black Square 3", "Black Square", sans-serif; }
+[data-glyph-form="4"] { font-family: "Black Square 4", "Black Square", sans-serif; }
+[data-glyph-form="5"] { font-family: "Black Square 5", "Black Square", sans-serif; }
+[data-glyph-form="final-d"] { font-family: "Black Square Final D Thin", "Black Square", sans-serif; }
+[data-ending="turn"] [data-glyph-form="final-d"] { font-family: "Black Square Final D", "Black Square", sans-serif; }

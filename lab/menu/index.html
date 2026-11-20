@@ -8,8 +8,10 @@
     <link rel="preload" href="assets/BlackSquare-v69.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="../h-girl/fonts/manrope.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" />
+    <link rel="stylesheet" href="display-fonts.css" />
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="spiral-layout.css" />
+    <link rel="stylesheet" href="trail-layout.css" />
     <script type="module" src="menu.js"></script>
 </head>
 <body>
@@ -17,7 +19,7 @@
         <div class="safe">
             <header class="brand">
                 <div class="brand-type">
-                    <h1 class="wordmark">dip<wbr class="brand-break">naked</h1>
+                    <h1 class="wordmark"><span data-glyph-form="2">d</span>ip<wbr class="brand-break">nake<span data-glyph-form="final-d">d</span></h1>
                     <p class="slogan" lang="en">in affair with the abyss</p>
                 </div>
                 <div class="logo-slot">
@@ -55,7 +57,8 @@
             const options = new URLSearchParams(location.search);
             const root = document.documentElement;
             const layout = options.get('layout');
-            if (['a', 'void', 'spiral', 'b', 'c'].includes(layout)) root.dataset.layout = layout;
+            if (options.get('ending') === 'turn') root.dataset.ending = 'turn';
+            if (['a', 'void', 'spiral', 'trail', 'b', 'c'].includes(layout)) root.dataset.layout = layout;
             if (options.has('debug')) root.classList.add('debug');
             if (options.has('grid')) root.classList.add('show-grid');
             if (layout === 'void') {
@@ -65,6 +68,24 @@
                 center.setAttribute('aria-hidden', 'true');
                 center.append(document.querySelector('.logo-slot'));
                 list.insertBefore(center, list.children[4]);
+            }
+            if (layout === 'trail') {
+                if (options.get('sign') === 'under') {
+                    root.dataset.sign = 'under';
+                    const name = document.querySelector('.wordmark');
+                    const link = document.createElement('a');
+                    link.href = 'assets/spiral-three.svg';
+                    link.dataset.preview = 'signature';
+                    link.setAttribute('aria-description', 'Открыть знак dipnaked');
+                    link.append(...name.childNodes);
+                    name.append(link);
+                }
+                // Reading and keyboard navigation follow the same turn as the lettering.
+                const list = document.querySelector('.menu ul');
+                for (const id of ['debility.records', 'snailstrobe', 'peek10x', 'telegram', 'lab']) {
+                    const row = list.querySelector('[data-preview="' + id + '"]')?.closest('li');
+                    if (row) list.append(row);
+                }
             }
         }
     </script>

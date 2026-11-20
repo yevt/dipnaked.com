@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Пробы знака · dipnaked</title>
+    <link rel="icon" href="assets/d-mask.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="display-fonts.css">
+    <link rel="stylesheet" href="signs.css">
+</head>
+<body>
+    <main>
+        <header>
+            <h1>Знак dipnaked</h1>
+            <div class="settings">
+                <label>Размер
+                    <select id="size">
+                        <option value="96" selected>96 px</option>
+                        <option value="32">32 px</option>
+                        <option value="16">16 px</option>
+                    </select>
+                </label>
+                <label><input id="gray" type="checkbox"> Серый фон</label>
+            </div>
+        </header>
+        <section id="wordmarks" aria-labelledby="name-title">
+            <h2 id="name-title">Две d в названии</h2>
+            <a class="name-proof" data-ending="turn" href="./?layout=trail&amp;sign=under&amp;mark=d&amp;ending=turn">
+                <span class="name-label">P на 180°</span>
+                <span class="wordmark"><span data-glyph-form="2">d</span>ipnake<span data-glyph-form="final-d">d</span></span>
+            </a>
+            <a class="name-proof" data-ending="thin" href="./?layout=trail&amp;sign=under&amp;mark=d&amp;ending=thin">
+                <span class="name-label">Тонкая стойка</span>
+                <span class="wordmark"><span data-glyph-form="2">d</span>ipnake<span data-glyph-form="final-d">d</span></span>
+            </a>
+            <nav class="edge-links" aria-label="Вертикальная вёрстка">
+                <a href="./?layout=a">Кромка</a>
+            </nav>
+        </section>
+        <section id="upstream" aria-labelledby="upstream-title">
+            <div class="scene-heading">
+                <h2 id="upstream-title">Против течения</h2>
+                <button type="button" id="flow-play" aria-controls="flow-scene" disabled>Пауза</button>
+                <a href="assets/d-upstream.svg" download>Скачать SVG</a>
+            </div>
+            <object id="flow-scene" type="image/svg+xml" data="assets/d-upstream.svg"
+                    width="640" height="160" aria-label="Строчная d плывёт влево против волн" tabindex="-1">
+                <img src="assets/d-upstream.svg" alt="Буква d наполовину погружена хвостом в воду">
+            </object>
+        </section>
+        <section aria-labelledby="letter-title">
+            <h2 id="letter-title">D как отдельный знак</h2>
+            <p class="hint">Светлый образец покажет знак рядом с названием. Для разрыва выберите тёмный образец и нажмите на dipnaked.</p>
+            <div class="samples" id="letters"></div>
+        </section>
+        <section aria-labelledby="spiral-title">
+            <h2 id="spiral-title">Спираль</h2>
+            <div class="samples" id="spirals"></div>
+        </section>
+    </main>
+    <script type="module">
+        import { letters, spirals, signDescription } from './signs.js';
+
+        const scene = document.querySelector('#flow-scene');
+        const play = document.querySelector('#flow-play');
+        const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+        let paused = reduceMotion.matches;
+        function updatePlayback() {
+            const svg = scene.contentDocument?.documentElement;
+            if (!svg?.pauseAnimations) return;
+            if (paused) svg.pauseAnimations();
+            else svg.unpauseAnimations();
+            svg.classList.add('motion-ok');
+            play.textContent = paused ? 'Продолжить' : 'Пауза';
+            play.disabled = false;
+        }
+        function connectScene() {
+            if (paused) scene.contentDocument?.documentElement?.setCurrentTime?.(0);
+            updatePlayback();
+        }
+        scene.addEventListener('load', connectScene);
+        connectScene();
+        play.addEventListener('click', () => { paused = !paused; updatePlayback(); });
+        reduceMotion.addEventListener('change', event => { paused = event.matches; updatePlayback(); });
+
+        function showSamples(container, signs) {
+            for (const sign of signs) {
+                const sample = document.createElement('figure');
+                const label = document.createElement('figcaption');
+                label.textContent = sign.label;
+                sample.append(label);
+                for (const tone of ['paper', 'black', 'gray']) {
+                    const under = tone === 'black';
+                    const link = document.createElement('a');
+                    link.className = 'swatch ' + tone;
+                    link.href = './?layout=trail&mark=' + sign.id + (under ? '&sign=under' : '');
+                    link.setAttribute('aria-label', signDescription(sign) + (under ? ' в разрыве' : ' на листе'));
+                    const image = new Image();
+                    image.src = sign.src;
+                    image.alt = '';
+                    link.append(image);
+                    sample.append(link);
+                }
+                container.append(sample);
+            }
+        }
+
+        showSamples(document.querySelector('#letters'), letters);
+        showSamples(document.querySelector('#spirals'), spirals);
+        const size = document.querySelector('#size');
+        const gray = document.querySelector('#gray');
+        function updateSamples() {
+            document.documentElement.style.setProperty('--sign-size', size.value + 'px');
+            document.body.classList.toggle('with-gray', gray.checked);
+        }
+        size.addEventListener('change', updateSamples);
+        gray.addEventListener('change', updateSamples);
+        updateSamples();
+    </script>
+</body>
+</html>

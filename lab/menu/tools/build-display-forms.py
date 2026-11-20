@@ -10,6 +10,7 @@ from pathlib import Path
 
 import uharfbuzz as hb
 from fontTools import subset
+from fontTools.pens.ttGlyphPen import TTGlyphPen
 from fontTools.ttLib import TTFont
 from fontTools.varLib.instancer import instantiateVariableFont
 
@@ -58,6 +59,34 @@ def write_alphabets(forms):
     )
 
 
+def save_face(face, mapping, filename):
+    for table in face["cmap"].tables:
+        if table.isUnicode():
+            table.cmap = dict(mapping)
+    sub = subset.Subsetter()
+    sub.populate(unicodes=mapping)
+    sub.subset(face)
+    face.flavor = "woff2"
+    face.recalcTimestamp = False
+    face.save(ASSETS / filename)
+
+
+def write_final_ds(font):
+    # Use a composite so the bowl and stem follow the source's FILL axis.
+    # The cap and baseline are 1000 grid units apart in both source glyphs.
+    for suffix, component, matrix in [
+        ("turn", "P", (-1, 0, 0, -1, 1000, 1000)),
+        ("thin", "uni042C.alt1", (-1, 0, 0, 1, 1000, 0)),
+    ]:
+        face = deepcopy(font)
+        slot = face.getBestCmap()[ord("d")]
+        pen = TTGlyphPen(face.getGlyphSet())
+        pen.addComponent(component, matrix)
+        face["glyf"][slot] = pen.glyph()
+        face["gvar"].variations[slot] = []
+        save_face(face, {ord("d"): slot}, f"BlackSquare-v69-d-{suffix}.woff2")
+
+
 def write_faces(font, forms):
     # Keep the FILL axis available for the display weight of every alternate.
     font = instantiateVariableFont(font, ROUND)
@@ -67,15 +96,8 @@ def write_faces(font, forms):
     for offset in range(1, max(map(len, forms.values()))):
         face = deepcopy(font)
         mapping = {cp: seq[offset] for cp, seq in forms.items() if offset < len(seq)}
-        for table in face["cmap"].tables:
-            if table.isUnicode():
-                table.cmap = dict(mapping)
-        sub = subset.Subsetter()
-        sub.populate(unicodes=mapping)
-        sub.subset(face)
-        face.flavor = "woff2"
-        face.recalcTimestamp = False
-        face.save(ASSETS / f"BlackSquare-v69-form{offset + 1}.woff2")
+        save_face(face, mapping, f"BlackSquare-v69-form{offset + 1}.woff2")
+    write_final_ds(font)
 
 
 if __name__ == "__main__":

@@ -2,9 +2,16 @@ import { TearSolver } from '../membrane/tear/solver.js';
 import { createTearRenderer } from '../membrane/tear/renderer.js';
 import { addPreview } from './preview.js';
 import { alternateDisplayType, fitSlogan } from './display-type.js';
+import { findSign, showSignOnSheet, signDescription } from './signs.js';
 
 const sheet = document.querySelector('.sheet');
 const root = document.documentElement;
+const trialSign = root.dataset.layout === 'trail' && findSign(new URLSearchParams(location.search).get('mark'));
+const signatureLink = sheet.querySelector('a[data-preview="signature"]');
+if (trialSign) {
+    if (signatureLink) signatureLink.href = trialSign.src;
+    else showSignOnSheet(sheet.querySelector('.logo'), trialSign);
+}
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 let active = null;
 let healing = null;
@@ -116,7 +123,7 @@ function openPatch(cx, cy, trigger, preview) {
     const element = document.createElement('section');
     element.className = 'tear';
     element.tabIndex = -1;
-    element.setAttribute('aria-label', preview ? trigger.querySelector('.word').textContent : 'Разрыв листа');
+    element.setAttribute('aria-label', preview ? (trigger.querySelector('.word') || trigger).textContent : 'Разрыв листа');
     element.style.setProperty('--unit', unit + 'px');
     element.style.left = cx + 'px';
     element.style.top = cy + 'px';
@@ -173,6 +180,10 @@ async function enableMenu() {
     const response = await fetch(new URL('./previews.json', import.meta.url));
     if (!response.ok) throw new Error('previews.json: ' + response.status);
     const previews = await response.json();
+    if (trialSign && signatureLink) {
+        previews.signature.src = trialSign.src;
+        previews.signature.alt = signDescription(trialSign);
+    }
     for (const trigger of sheet.querySelectorAll('a[data-preview]')) {
         const preview = previews[trigger.dataset.preview];
         if (!preview) continue;

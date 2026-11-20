@@ -30,7 +30,7 @@
         "lab lab   lab   lab   lab   lab   lab   .     .     .     .     .";
 }
 /* The landmark and the list keep their semantics and share the sheet tracks. */
-[data-layout="spiral"] :is(.menu, .menu ul) {
+:is([data-layout="spiral"], [data-layout="trail"]) :is(.menu, .menu ul) {
     display: grid;
     grid-area: 1 / 1 / -1 / -1;
     grid-template-columns: subgrid;

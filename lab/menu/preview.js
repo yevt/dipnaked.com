@@ -106,6 +106,15 @@ export function addPreview(bed, preview, trigger, cx, cy, unit) {
     card.style.setProperty('--offset-y', (top + bottom) / 2 + 'px');
     card.style.setProperty('--card-width', right - left + 'px');
     card.style.setProperty('--card-height', bottom - top + 'px');
+    if (preview.type === 'signature') {
+        const sign = new Image();
+        sign.className = 'tear-signature';
+        sign.src = preview.src;
+        sign.alt = preview.alt;
+        card.append(sign);
+        bed.append(card);
+        return;
+    }
     const link = document.createElement('a');
     link.className = 'tear-preview';
     link.href = preview.href || trigger.href;

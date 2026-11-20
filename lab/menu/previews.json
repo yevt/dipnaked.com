@@ -1,4 +1,9 @@
 {
+    "signature": {
+        "type": "signature",
+        "src": "assets/spiral-three.svg",
+        "alt": "Спираль dipnaked с тремя заполненными витками"
+    },
     "streaming": {
         "type": "services",
         "services": [

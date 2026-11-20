@@ -34,9 +34,12 @@ export function alternateDisplayType(sheet) {
         const nodes = [];
         while (walker.nextNode()) nodes.push(walker.currentNode);
         for (const node of nodes) {
+            const fixedForm = node.parentElement.closest('[data-glyph-form]');
             const runs = [];
             for (const letter of node.data) {
                 const form = formOf(letter);
+                // Authored letters still take their place in the page-wide sequence.
+                if (fixedForm) continue;
                 const last = runs.at(-1);
                 if (last && last.form === form) last.text += letter;
                 else runs.push({ form, text: letter });
@@ -69,7 +72,7 @@ export function fitSlogan(brand) {
     const sampleSpacing = 'letterSpacing' in ctx ? 1 : 0;
 
     function fit() {
-        // Both drawings of the final d have a quarter em of blank advance.
+        // Both terminal forms of d have a quarter em of blank advance.
         const display = getComputedStyle(mark);
         const end = word.getBoundingClientRect().right - parseFloat(display.fontSize) / 4
             - (parseFloat(display.letterSpacing) || 0);
@@ -79,8 +82,8 @@ export function fitSlogan(brand) {
         ctx.letterSpacing = sampleSpacing + 'px';
         const text = slogan.textContent;
         const ink = ctx.measureText(text);
-        // Inset the two fine s curves by 2px from the heavier d's ink edge.
-        const width = end - 2 - slogan.getBoundingClientRect().left;
+        const endInset = parseFloat(style.getPropertyValue('--slogan-end-inset')) || 2;
+        const width = end - endInset - slogan.getBoundingClientRect().left;
         const gaps = Math.max(1, Array.from(text).length - 1);
         slogan.style.textIndent = ink.actualBoundingBoxLeft + 'px';
         const extra = width - (ink.actualBoundingBoxLeft + ink.actualBoundingBoxRight);

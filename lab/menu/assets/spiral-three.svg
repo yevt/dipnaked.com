@@ -3,6 +3,10 @@
     <style>
         #tube-only:target ~ .water, #water-only:target ~ .tube { display: none; }
         #water-only:target ~ .water { clip-path: none; }
+        .study { display: none; }
+        .study:target { display: inline; }
+        .study:target ~ .water, .study:target ~ .tube { display: none; }
+        .mist { opacity: .12; }
     </style>
     <defs>
         <!-- The first three turns of the continuous tube, in its original 256-unit grid. -->
@@ -41,9 +45,33 @@
             C 217.806 -14.053 233.644 -7.259 247.993 1.628"/>
         <!-- Standalone mark at the desktop proportion: 3 px in a 108 px image. -->
         <clipPath id="liquid"><rect x="-64" y="138.667" width="384" height="192"/></clipPath>
+        <clipPath id="air"><rect x="-64" y="-64" width="384" height="202.667"/></clipPath>
+        <use id="wide" href="#walls" fill="black" stroke="black" stroke-width="4.5" stroke-linejoin="round"/>
+        <!-- An inward offset on both walls keeps the pitch and centre of each turn. -->
+        <mask id="inset" maskUnits="userSpaceOnUse" x="-64" y="-64" width="384" height="384">
+            <use href="#walls" fill="white" stroke="black" stroke-width="3" stroke-linejoin="round"/>
+        </mask>
+        <use id="slim" href="#walls" mask="url(#inset)"/>
     </defs>
     <g id="water-only"/>
     <g id="tube-only"/>
+    <g class="study" id="even">
+        <use class="mist" href="#wide" clip-path="url(#air)"/>
+        <use href="#wide" clip-path="url(#liquid)"/>
+    </g>
+    <g class="study" id="slim-below">
+        <use class="mist" href="#wide" clip-path="url(#air)"/>
+        <use href="#slim" clip-path="url(#liquid)"/>
+    </g>
+    <g class="study" id="slim-above">
+        <use class="mist" href="#slim" clip-path="url(#air)"/>
+        <use href="#wide" clip-path="url(#liquid)"/>
+    </g>
+    <!-- The responsive wordmark clips these full layers at its own P counter. -->
+    <g class="study" id="mist-wide"><use class="mist" href="#wide"/></g>
+    <g class="study" id="mist-slim"><use class="mist" href="#slim"/></g>
+    <g class="study" id="ink-wide"><use href="#wide"/></g>
+    <g class="study" id="ink-slim"><use href="#slim"/></g>
     <use class="water" href="#walls" fill="#000" clip-path="url(#liquid)"/>
     <use class="tube" href="#walls" fill="none" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>
 </svg>
