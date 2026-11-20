@@ -1,112 +1,57 @@
-<!DOCTYPE html>
-<html lang="en" style="background:#000">
+<!doctype html>
+<html lang="ru" data-layout="trail" data-sign="under">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>dipnaked</title>
-    <link rel="icon" href="/logo-v2.png" />
+    <base href="/lab/menu/" />
+    <link rel="icon" href="assets/spiral-three.svg" type="image/svg+xml" />
+    <link rel="preload" href="assets/BlackSquare-v69.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="../h-girl/fonts/manrope.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" />
-    <link rel="stylesheet" href="/style.css" />
-    <script>
-        // Arm the intro only when JS actually runs — bots / no-JS visitors get
-        // the plain page. If the intro module fails to boot (old cache, network),
-        // auto-disarm after 7s so nobody is left staring at a black screen.
-        //
-        // Returning visitors: once the intro has fully played (or was skipped),
-        // membrane.js stores INTRO_VERSION in localStorage. A matching value
-        // here means "already seen" — the intro is NOT armed, the page renders
-        // plain immediately, and membrane.js boots straight into the done state
-        // (logo + links visible, "replay intro" in the corner). Bump the
-        // version to make everyone see the intro again.
-        // NOTE: keep INTRO_VERSION / the storage key in sync with
-        // /lab/membrane/intro/membrane.js.
-        (function () {
-            var INTRO_VERSION = '1';
-            var played = false;
-            try { played = localStorage.getItem('dipnaked.introPlayedVersion') === INTRO_VERSION; } catch (e) { /* private mode etc. — just play */ }
-            if (played) return;
-            document.documentElement.classList.add('intro-armed');
-            setTimeout(function () {
-                if (!window.MEMBRANE) document.documentElement.classList.remove('intro-armed');
-            }, 7000);
-        })();
-    </script>
-    <style>
-        /* No scrollbars during the intro — the layout is CSS-scaled and any
-           overflow would shift the logo position between runs. .intro-armed
-           covers the pre-boot window (head script); .intro-playing is toggled
-           by membrane.js for the whole flight, including replays. */
-        .intro-armed, .intro-armed body,
-        .intro-playing, .intro-playing body { overflow: hidden; }
-        /* Membrane canvas overlay: fullscreen, transparent, ABOVE everything. */
-        #membrane-canvas {
-            position: fixed;
-            inset: 0;
-            z-index: 500;           /* above layout — nothing occludes the physics */
-            pointer-events: none;   /* layout stays clickable underneath */
-        }
-        /* Zoom wrapper: JS drives translate+scale every frame so the layout
-           and the membrane pull back as one world. */
-        #layout-zoom {
-            display: flex;
-            flex-direction: column;
-            flex: 1 1 auto;
-            transform-origin: 0 0;
-            will-change: transform;
-        }
-        /* Layout hidden while the intro plays; it fades in at the crossfade.
-           Only applies when armed — the no-JS page stays fully visible. */
-        .intro-armed .center-block { opacity: 0; }
-        /* Intro button: bottom-right, in the site's own type. One element, two
-           roles driven by membrane.js: "skip intro" while the intro plays,
-           "replay intro" once it's done. Starts invisible so the no-JS page
-           stays clean; membrane.js reveals it on boot. */
-        #replay-btn {
-            position: fixed;
-            right: 24px;
-            bottom: 20px;
-            z-index: 600;
-            background: none;
-            border: none;
-            padding: 8px 4px;
-            font: inherit;
-            font-size: 0.8em;
-            letter-spacing: 0.12em;
-            color: var(--color-tagline, #777);
-            cursor: pointer;
-            opacity: 0;
-            pointer-events: none;
-            transition: color 0.2s ease;
-        }
-        #replay-btn:hover { color: var(--color-text, #ddd); }
-    </style>
+    <link rel="stylesheet" href="display-fonts.css" />
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="spiral-layout.css" />
+    <link rel="stylesheet" href="trail-layout.css" />
+    <script type="module" src="menu.js"></script>
 </head>
-<body data-intro-time-brake>
-    <div id="layout-zoom">
-    <div class="center-block">
-        <a href="/"><img src="/logo-v2.png" alt="dipnaked" class="logo" id="logo-img" /></a>
-        <div class="text-block">
-            <div class="brand-name"><a href="/">dipnaked</a></div>
-            <div class="tagline">in affair with the abyss</div>
-            <div class="links">
-                <a href="/listen/">listen</a>
-                <a href="https://www.youtube.com/@dipnaked" target="_blank" rel="noopener">watch</a>
-                <a href="https://www.instagram.com/snailstrobe/" target="_blank" rel="noopener">look</a>
-                <a href="/lab/">lab</a>
-            </div>
+<body>
+    <main class="sheet">
+        <div class="safe">
+            <header class="brand">
+                <div class="brand-type">
+                    <h1 class="wordmark"><a href="assets/spiral-three.svg" data-preview="signature" aria-description="Открыть знак dipnaked"><span data-glyph-form="2">d</span>ip<wbr class="brand-break">nake<span data-glyph-form="final-d">d</span></a></h1>
+                    <p class="slogan" lang="en">in affair with the abyss</p>
+                </div>
+                <div class="logo-slot">
+                    <div class="logo">
+                        <div class="logo-water" data-print-clip>
+                            <img src="assets/spiral-three.svg#water-only" alt="" width="384" height="384" />
+                        </div>
+                        <img src="assets/spiral-three.svg#tube-only" alt="" width="384" height="384" />
+                    </div>
+                </div>
+            </header>
+
+            <nav class="menu" aria-label="Линейки">
+                <ul>
+                    <li><a class="item" data-preview="streaming" href="/listen/">
+                        <span class="word">стриминги</span><span class="sub">музыка</span></a></li>
+                    <li><a class="item" data-preview="youtube" href="https://www.youtube.com/@dipnaked">
+                        <span class="word">youtube</span><span class="sub">треки, гитара, фортепиано</span></a></li>
+                    <li><a class="item" data-preview="debility.records" href="https://www.youtube.com/@debilityrecords">
+                        <span class="word">debility.<wbr>records</span><span class="sub">философия творчества, рефлексия, процесс</span></a></li>
+                    <li><a class="item" data-preview="snailstrobe" href="https://www.instagram.com/snailstrobe/">
+                        <span class="word">snail<wbr>strobe</span><span class="sub">эксперименты с графикой</span></a></li>
+                    <li><a class="item" data-preview="peek10x" href="https://www.instagram.com/peek10x/">
+                        <span class="word">peek10x</span><span class="sub">фото, видео</span></a></li>
+                    <li><a class="item" data-preview="telegram" href="https://t.me/dipnaked">
+                        <span class="word">telegram</span><span class="sub">заметки, эссе</span></a></li>
+                    <li><a class="item" data-preview="lab" href="/lab/">
+                        <span class="word">lab</span><span class="sub">опыты в браузере</span></a></li>
+                </ul>
+            </nav>
         </div>
-    </div>
-    </div>
-
-    <button id="replay-btn" title="Replay the intro">replay intro</button><!-- label/role managed by membrane.js: skip intro ↔ replay intro -->
-
-    <script type="importmap">
-    {
-        "imports": {
-            "three": "/lab/membrane/vendor/three.module.min.js"
-        }
-    }
-    </script>
-    <script type="module" src="/lab/membrane/intro/membrane.js"></script>
+    </main>
 </body>
 </html>

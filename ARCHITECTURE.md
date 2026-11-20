@@ -1,11 +1,19 @@
 # Architecture — dipnaked.com
 
 ## Overview
-Root landing page (`index.html`) with a micro-modular grid layout. Content block
-is bounding-box-centered in the viewport when it fits; gracefully scrolls (minimal
-scroll) when it doesn't.
 
-## Layout Hierarchy
+The root `index.html` serves the clockwise menu from `/lab/menu/?layout=trail&sign=under`.
+Activating the wordmark reveals the spiral beneath the sheet. Each of the seven
+sections opens its own preview. The HTML contains the links in reading and tab
+order, so they also work when JavaScript is disabled.
+
+The homepage uses `/lab/menu/` as its base URL for the shared styles, scripts,
+fonts and preview media. The menu grid is defined in `lab/menu/trail-layout.css`.
+
+## Layout of the dark catalogue and listening pages
+
+The following grid and typography belong to the shared root `style.css`.
+
 ```
 body (flex column, overflow:auto, padding:var(--edge))
 └─ .center-block (flex column, margin:auto → safe centering)
@@ -61,8 +69,10 @@ feel as long as possible.
 | `--edge`          | var(--mm)     | Min clearance from viewport edge   |
 
 ## Files
+
 - `index.html` — Main landing page
-- `style.css` — All styles; theme tokens in `:root`
+- `lab/menu/` — Menu assets, preview data, styles and interaction code
+- `style.css` — Shared styles for the dark pages
 - `logo.png` — Brand logo
 - `assets/icons/` — Icons for music services (used in release pages)
 - `assets/logos/` — Additional logos (e.g., Spotify)
@@ -84,21 +94,10 @@ Organic Blob is built in the sibling `organic-blob-reconstruction` project.
 `npm run deploy` there builds `dist/` and mirrors it into `lab/organic-blob/`.
 The existing GitHub Pages workflow publishes these static files with the site.
 
-## Intro (main page)
-`lab/membrane/intro/membrane.js` plays the membrane intro over the landing
-page. One transparent state machine drives the bottom-right button
-(`#replay-btn`):
-- `playing` — the flight is running; the button reads **skip intro** (skip
-  lands the camera, snaps the film into the logo funnel and runs a quick
-  dissolve).
-- `done` — finished / skipped / already seen; the button reads **replay intro**.
+## Previous homepage
 
-Persistence: when the intro lands (or is skipped) `INTRO_VERSION` is written
-to `localStorage` under `dipnaked.introPlayedVersion`. On later visits the
-head script in `index.html` sees the matching version and does not arm the
-intro — the page renders plain immediately and membrane.js boots straight
-into `done`. Bump `INTRO_VERSION` (in **both** `membrane.js` and the
-`index.html` head script) to re-show the intro to everyone.
+Commit `77940b4` preserves the dark homepage and its skip/replay controls.
+The membrane simulation is also available in the lab catalogue at `/lab/membrane/intro/`.
 
 ## Autopost integration pages
 
