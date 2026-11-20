@@ -234,7 +234,7 @@ async function enableMenu() {
         healing?.renderer?.refreshTexture();
     }
     document.fonts.addEventListener('loadingdone', refreshPrint);
-    sheet.querySelector('.logo').addEventListener('load', refreshPrint);
+    sheet.querySelector('.logo').addEventListener('load', refreshPrint, true);
 }
 
 alternateDisplayType(sheet);

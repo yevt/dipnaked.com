@@ -18,7 +18,7 @@ export function alternateDisplayType(sheet) {
         return 1 + (phase - base + family.length) % family.length;
     }
 
-    for (const label of sheet.querySelectorAll('.wordmark, .slogan, .word, .sub')) {
+    for (const label of sheet.querySelectorAll('.wordmark, .word')) {
         const walker = document.createTreeWalker(label, NodeFilter.SHOW_TEXT);
         const nodes = [];
         while (walker.nextNode()) nodes.push(walker.currentNode);

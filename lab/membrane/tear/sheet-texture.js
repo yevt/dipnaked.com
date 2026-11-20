@@ -77,9 +77,21 @@ export function captureSheet(sheet, bounds, width, height) {
             if (!overlaps(rect, bounds)) continue;
             const style = getComputedStyle(node);
             if (style.visibility !== "visible") continue;
+            const clip = node.closest("[data-print-clip]");
+            if (clip) {
+                const box = clip.getBoundingClientRect();
+                // A rectangular CSS overflow clip ends on a screen-pixel boundary.
+                const snap = value => Math.round(value * devicePixelRatio) / devicePixelRatio;
+                const left = snap(box.left), top = snap(box.top);
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(left, top, snap(box.right) - left, snap(box.bottom) - top);
+                ctx.clip();
+            }
             ctx.globalCompositeOperation = style.mixBlendMode === "difference" ? "difference" : "source-over";
             ctx.drawImage(node, rect.left, rect.top, rect.width, rect.height);
             ctx.globalCompositeOperation = "source-over";
+            if (clip) ctx.restore();
         }
     }
     return canvas;

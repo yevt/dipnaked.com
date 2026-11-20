@@ -59,7 +59,7 @@ def write_alphabets(forms):
 
 
 def write_faces(font, forms):
-    # Keep FILL variable so titles and fine print share the same alternate outlines.
+    # Keep the FILL axis available for the display weight of every alternate.
     font = instantiateVariableFont(font, ROUND)
     # A face exposes its chosen drawings directly at their original Unicode
     # positions. DOM text and Canvas2D can both select it by font-family.

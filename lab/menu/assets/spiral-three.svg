@@ -1,5 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="384" height="384" viewBox="-64 -64 384 384">
     <title>Спираль dipnaked</title>
+    <style>
+        #tube-only:target ~ .water, #water-only:target ~ .tube { display: none; }
+        #water-only:target ~ .water { clip-path: none; }
+    </style>
     <defs>
         <!-- The first three turns of the continuous tube, in its original 256-unit grid. -->
         <path id="walls" d="
@@ -35,8 +39,11 @@
             C -15 44.52 55.52 -24 147 -24
             C 165.66 -24 184.303 -22.428 200.825 -18.298
             C 217.806 -14.053 233.644 -7.259 247.993 1.628"/>
-        <clipPath id="liquid"><rect x="-64" y="128" width="384" height="192"/></clipPath>
+        <!-- Standalone mark at the desktop proportion: 5 px in a 108 px image. -->
+        <clipPath id="liquid"><rect x="-64" y="145.778" width="384" height="192"/></clipPath>
     </defs>
-    <use href="#walls" fill="#000" clip-path="url(#liquid)"/>
-    <use href="#walls" fill="none" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>
+    <g id="water-only"/>
+    <g id="tube-only"/>
+    <use class="water" href="#walls" fill="#000" clip-path="url(#liquid)"/>
+    <use class="tube" href="#walls" fill="none" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/>
 </svg>
