@@ -39,8 +39,8 @@
             C -15 44.52 55.52 -24 147 -24
             C 165.66 -24 184.303 -22.428 200.825 -18.298
             C 217.806 -14.053 233.644 -7.259 247.993 1.628"/>
-        <!-- Standalone mark at the desktop proportion: 5 px in a 108 px image. -->
-        <clipPath id="liquid"><rect x="-64" y="145.778" width="384" height="192"/></clipPath>
+        <!-- Standalone mark at the desktop proportion: 3 px in a 108 px image. -->
+        <clipPath id="liquid"><rect x="-64" y="138.667" width="384" height="192"/></clipPath>
     </defs>
     <g id="water-only"/>
     <g id="tube-only"/>

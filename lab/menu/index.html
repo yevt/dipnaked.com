@@ -9,25 +9,17 @@
     <link rel="preload" href="../h-girl/fonts/manrope.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" />
     <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="spiral-layout.css" />
     <script type="module" src="menu.js"></script>
-    <!-- Черновик: выбор раскладки (?layout=a|b|c), модульная сетка (?grid) и безопасная зона (?debug).
-         Убрать после того, как автор выберет раскладку. -->
-    <script>
-        (function () {
-            var q = new URLSearchParams(location.search), d = document.documentElement;
-            var l = q.get('layout');
-            if (l === 'a' || l === 'b' || l === 'c') d.dataset.layout = l;
-            if (q.has('debug')) d.classList.add('debug');
-            if (q.has('grid')) d.classList.add('show-grid');
-        })();
-    </script>
 </head>
 <body>
     <main class="sheet">
         <div class="safe">
             <header class="brand">
-                <h1 class="wordmark">dipnaked</h1>
-                <p class="slogan">in affair with the abyss</p>
+                <div class="brand-type">
+                    <h1 class="wordmark">dip<wbr class="brand-break">naked</h1>
+                    <p class="slogan" lang="en">in affair with the abyss</p>
+                </div>
                 <div class="logo-slot">
                     <div class="logo">
                         <div class="logo-water" data-print-clip>
@@ -58,5 +50,23 @@
             </nav>
         </div>
     </main>
+    <script>
+        {
+            const options = new URLSearchParams(location.search);
+            const root = document.documentElement;
+            const layout = options.get('layout');
+            if (['a', 'void', 'spiral', 'b', 'c'].includes(layout)) root.dataset.layout = layout;
+            if (options.has('debug')) root.classList.add('debug');
+            if (options.has('grid')) root.classList.add('show-grid');
+            if (layout === 'void') {
+                const list = document.querySelector('.menu ul');
+                const center = document.createElement('li');
+                center.className = 'menu-center';
+                center.setAttribute('aria-hidden', 'true');
+                center.append(document.querySelector('.logo-slot'));
+                list.insertBefore(center, list.children[4]);
+            }
+        }
+    </script>
 </body>
 </html>

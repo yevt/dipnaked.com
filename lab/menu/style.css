@@ -130,15 +130,14 @@ img { display: block; }
 .sheet {
     position: relative;
     min-height: 100dvh;
-    padding-block: var(--page-inset);
+    padding-block: max(var(--page-inset), env(safe-area-inset-top, 0px))
+                   max(var(--page-inset), env(safe-area-inset-bottom, 0px));
 }
 .safe {
     position: relative;
     /* Match the grayscale edges of type printed on the moving membrane. */
     will-change: transform;
     display: grid;
-    /* Together with the 1px optical shift of the spiral, this extra module
-       leaves two more pixels of clear paper below its heavier half. */
     row-gap: calc(var(--separator-gap) + var(--step));
     width: min(100%, 78rem);
     margin-inline: auto;
@@ -150,6 +149,12 @@ img { display: block; }
 .brand {
     display: grid;
     justify-items: start;
+}
+.brand-type {
+    display: grid;
+    width: fit-content;
+    max-width: 100%;
+    text-align: start;
 }
 .menu ul {
     display: grid;
@@ -163,12 +168,14 @@ img { display: block; }
     text-box: trim-both cap alphabetic;
 }
 .wordmark {
-    --fitting-mark: calc((100vw - 2 * var(--gutter)) / 10.2);
+    /* The v69 wordmark, including its tracking, occupies 10.16em. */
+    --fitting-mark: calc((100vw - var(--gutter) - var(--gutter-end, var(--gutter))) / 10.17);
     font-size: min(var(--mark-size), var(--fitting-mark));
     font-size: min(var(--mark-size), max(var(--step), round(down, var(--fitting-mark), var(--step))));
     line-height: 1;
     letter-spacing: 0.02em;
 }
+.brand-break { display: none; }
 .slogan, .sub {
     color: var(--ink);
     font: 200 var(--copy-size) / var(--copy-line) "Manrope", sans-serif;
@@ -176,8 +183,9 @@ img { display: block; }
     overflow-wrap: anywhere;
 }
 .slogan {
+    contain: inline-size;
     margin-block-start: var(--name-slogan-gap);
-    letter-spacing: .02em;
+    letter-spacing: .18em;
 }
 .logo-slot {
     /* The third turn extends 54.25 units beyond the 256-unit grid slot. */
@@ -185,7 +193,7 @@ img { display: block; }
     position: relative;
     width: var(--logo-size);
     height: var(--logo-size);
-    margin-block: calc(var(--separator-gap) + var(--overhang)) var(--overhang);
+    margin-block: calc(var(--separator-gap) - var(--step) + var(--overhang)) var(--overhang);
     justify-self: center;
 }
 @supports (width: round(nearest, 1px, 1px)) {
@@ -202,7 +210,7 @@ img { display: block; }
 .logo > img { position: relative; }
 .logo-water {
     position: absolute;
-    inset: calc(50% + 5px) 0 0;
+    inset: calc(50% + 3px) 0 0;
     overflow: hidden;
 }
 .logo-water img { position: absolute; inset: auto 0 0; }
@@ -234,23 +242,46 @@ img { display: block; }
 .item:focus-visible { outline: 1px solid var(--ink); outline-offset: 4px; }
 
 /* ============================================================
-   A — «Кромка». Ширину колонки задаёт надпись, начало строк совпадает с краем листа.
+   Поля листа
    ============================================================ */
-[data-layout="a"] .safe {
+[data-layout="void"] {
+    --gutter: calc(8 * var(--step));
+    --page-inset: calc(10 * var(--step));
+    --center-y: 0px;
+}
+@media (min-width: 40em) {
+    [data-layout="void"] {
+        --gutter: calc(9 * var(--step));
+        --page-inset: calc(12 * var(--step));
+    }
+}
+@media (min-width: 64em) {
+    [data-layout="void"] {
+        --gutter: calc(10 * var(--step));
+        --page-inset: calc(14 * var(--step));
+    }
+}
+/* Visible width of the tube including its stroke, in the original 256-unit slot. */
+[data-layout="a"] {
+    --spiral-width: calc(var(--logo-size) * 343.5 / 256);
+    --gutter: var(--spiral-width);
+    --gutter-end: calc(3 * var(--step));
+    --page-inset: calc(var(--spiral-width) / 2);
+    --center-y: 0px;
+}
+@supports (width: round(nearest, 1px, 1px)) {
+    [data-layout="a"] {
+        --gutter: round(nearest, var(--spiral-width), var(--step));
+        --page-inset: round(nearest, calc(var(--spiral-width) / 2), var(--step));
+    }
+}
+:is([data-layout="a"], [data-layout="void"]) .safe {
     width: 100%;
     margin-inline: 0;
-    padding-inline: env(safe-area-inset-left, 0px) max(var(--gutter), env(safe-area-inset-right, 0px));
+    padding-inline: max(var(--gutter), env(safe-area-inset-left, 0px))
+                    max(var(--gutter-end, var(--gutter)), env(safe-area-inset-right, 0px));
     grid-template-columns: minmax(0, 1fr);
-    justify-content: start;
-    text-align: left;
 }
-/* На широком экране колонка отмеряется надписью. На узком длинные слова
-   используют доступную ширину от кромки до безопасного правого поля. */
-@media (min-width: 40em) {
-    [data-layout="a"] .safe { grid-template-columns: minmax(0, max-content); }
-    [data-layout="a"] :is(.slogan, .menu) { contain: inline-size; }
-}
-[data-layout="a"] .slogan { justify-self: stretch; }
 [data-layout="a"] .logo-slot { justify-self: start; }
 [data-layout="a"] .logo {
     /* The SVG has 19.75 clear units to the left of the ink. Align its image
@@ -259,9 +290,57 @@ img { display: block; }
     left: var(--logo-left);
     left: round(nearest, var(--logo-left), 1px);
 }
-[data-layout="a"] .item { align-items: flex-start; }
-[data-layout="a"] .sub { text-wrap: wrap; }
-[data-layout="a"] .item:focus-visible { outline-offset: -1px; }
+:is([data-layout="a"], [data-layout="void"]) .item { align-items: flex-start; }
+:is([data-layout="a"], [data-layout="void"]) .sub { text-wrap: wrap; }
+:is([data-layout="a"], [data-layout="void"]) .item:focus-visible {
+    outline-offset: calc(var(--caption-gap) - 1px);
+}
+
+/* Кромка. На широком листе ширину единственной колонки задаёт надпись. */
+@media (width < 22.5em) {
+    [data-layout="a"] { --title-size: calc(5 * var(--step)); }
+}
+@media (min-width: 40em) {
+    [data-layout="a"] .safe { grid-template-columns: minmax(0, max-content); }
+    [data-layout="a"] .menu { contain: inline-size; }
+}
+
+/* Пропуск. Знак занимает паузу между четвёртой и пятой рубриками. */
+[data-layout="void"] .safe { row-gap: var(--gutter); }
+[data-layout="void"] .menu { container-type: inline-size; }
+.menu-center {
+    display: grid;
+    align-items: center;
+    pointer-events: none;
+}
+.menu-center .logo-slot {
+    --offset: calc((100% - var(--logo-size)) / 2);
+    justify-self: start;
+    margin-inline-start: var(--offset);
+    /* The printed SVG and its native image share a whole-pixel origin. */
+    margin-inline-start: round(nearest, var(--offset), 1px);
+    margin-block: var(--overhang);
+}
+.menu-center ~ li { text-align: end; }
+.menu-center ~ li .item { align-items: flex-end; }
+@container (min-width: 58em) {
+    [data-layout="void"] .menu ul {
+        --column-space: clamp(var(--item-gap), 3cqi, calc(12 * var(--step)));
+        --row-space: clamp(calc(10 * var(--step)), 12vh, calc(36 * var(--step)));
+        grid-template-columns: minmax(0, 1fr) minmax(min-content, .76fr) minmax(0, 1fr);
+        gap: var(--row-space) var(--column-space);
+        gap: round(nearest, var(--row-space), var(--step)) round(nearest, var(--column-space), var(--step));
+    }
+    [data-layout="void"] .word { overflow-wrap: normal; }
+    [data-layout="void"] .menu li { align-content: center; }
+    [data-layout="void"] li:is(:nth-child(2), :nth-last-child(2)) { justify-self: center; }
+    [data-layout="void"] li:nth-child(4) { grid-area: 2 / 1; }
+    .menu-center { grid-area: 2 / 1 / 3 / -1; }
+    .menu-center + li { grid-area: 2 / 3; }
+    [data-layout="void"] li:nth-last-child(2) { grid-column: 2; }
+    .menu-center ~ li { text-align: start; }
+    .menu-center ~ li .item { align-items: flex-start; }
+}
 
 /* ============================================================
    B — «Разворот»: слева знак, справа список.

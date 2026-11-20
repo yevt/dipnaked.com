@@ -1,0 +1,147 @@
+/* From the sign, read right to the name, then down, left, up and right.
+   The second circuit passes outside the first. All lettering stays upright. */
+[data-layout="spiral"] {
+    --gutter: calc(4 * var(--step));
+    --page-inset: calc(6 * var(--step));
+    --logo-size: calc(8 * var(--step));
+    --mark-size: calc(8 * var(--step));
+    --title-size: calc(5 * var(--step));
+    --turn-gap: calc(5 * var(--step));
+}
+[data-layout="spiral"] .sheet {
+    container: spiral-sheet / inline-size;
+}
+[data-layout="spiral"] .safe {
+    width: min(100%, 100rem);
+    padding-inline: max(var(--gutter), env(safe-area-inset-left, 0px))
+                    max(var(--gutter), env(safe-area-inset-right, 0px));
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    /* Keep the origins of the SVG and printed text on CSS pixels as tracks resize. */
+    grid-template-columns: repeat(12, round(nearest, calc(100% / 12), 1px));
+    gap: var(--turn-gap) 0;
+    grid-template-areas:
+        "tg  tg    tg    tg    tg    tg    tg    tg    tg    tg    tg    tg"
+        ".   snail snail snail snail snail snail snail snail snail snail ."
+        ".   .     .     .     peek  peek  peek  peek  peek  peek  peek  peek"
+        ".   .     .     .     core  core  core  core  core  core  core  core"
+        "music music music music music music music music music music music ."
+        ".   video video video video video video video video .     .     ."
+        "rec rec   rec   rec   rec   rec   rec   rec   rec   rec   rec   rec"
+        "lab lab   lab   lab   lab   lab   lab   .     .     .     .     .";
+}
+/* The landmark and the list keep their semantics and share the sheet tracks. */
+[data-layout="spiral"] :is(.menu, .menu ul) {
+    display: grid;
+    grid-area: 1 / 1 / -1 / -1;
+    grid-template-columns: subgrid;
+    grid-template-rows: subgrid;
+    gap: inherit;
+}
+[data-layout="spiral"] .brand {
+    grid-area: core;
+    z-index: 1;
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: center;
+    column-gap: calc(3 * var(--step));
+}
+[data-layout="spiral"] .brand-type {
+    grid-area: 1 / 2;
+    width: 100%;
+    container-type: inline-size;
+}
+[data-layout="spiral"] .logo-slot {
+    grid-area: 1 / 1;
+    margin: var(--overhang);
+}
+/* Keep the edge of the liquid identical when a nearby tear repaints the sheet. */
+[data-layout="spiral"] .logo { will-change: transform; }
+[data-layout="spiral"] .brand-break { display: inline; }
+[data-layout="spiral"] .wordmark { --fitting-mark: calc(100cqi / 6.36); }
+[data-layout="spiral"] .menu li {
+    align-self: center;
+    justify-self: start;
+    max-width: 100%;
+    min-width: 0;
+}
+[data-layout="spiral"] .menu li:nth-child(1) { grid-area: music; justify-self: end; }
+[data-layout="spiral"] .menu li:nth-child(2) { grid-area: video; }
+[data-layout="spiral"] .menu li:nth-child(3) { grid-area: snail; }
+[data-layout="spiral"] .menu li:nth-child(4) { grid-area: peek; justify-self: end; }
+[data-layout="spiral"] .menu li:nth-child(5) { grid-area: rec; justify-self: end; }
+[data-layout="spiral"] .menu li:nth-child(6) { grid-area: lab; }
+[data-layout="spiral"] .menu li:nth-child(7) { grid-area: tg; }
+
+/* The direction runs from the title to its caption. DOM and tab order
+   always follow the numbered turns, including when a title wraps. */
+[data-layout="spiral"] .item { align-items: flex-start; }
+[data-layout="spiral"] li:nth-child(4n + 1) .item { flex-direction: row-reverse; align-items: center; }
+[data-layout="spiral"] li:nth-child(4n + 2) .item { flex-direction: column-reverse; }
+[data-layout="spiral"] li:nth-child(4n + 3) .item { flex-direction: row; align-items: center; }
+[data-layout="spiral"] li:nth-child(4n + 3) .word { text-align: end; }
+[data-layout="spiral"] li:nth-child(4n + 1) .sub { text-align: end; }
+[data-layout="spiral"] .sub { max-inline-size: 16ch; min-width: 0; }
+[data-layout="spiral"] li:nth-child(odd) .sub {
+    max-inline-size: 12ch;
+    min-inline-size: min-content;
+    overflow-wrap: normal;
+}
+[data-layout="spiral"] .word { overflow-wrap: normal; }
+@container spiral-sheet (max-width: 23rem) {
+    [data-layout="spiral"] .brand { grid-column-start: 4; }
+}
+@container spiral-sheet (width < 22rem) {
+    [data-layout="spiral"] .safe { --title-size: calc(4 * var(--step)); }
+    [data-layout="spiral"] .brand { grid-column-start: 3; }
+    [data-layout="spiral"] .menu li:nth-child(1) { grid-column: 1 / -1; }
+}
+@container spiral-sheet (min-width: 44rem) {
+    [data-layout="spiral"] .safe {
+        --gutter: calc(8 * var(--step));
+        --logo-size: calc(12 * var(--step));
+        --mark-size: calc(10 * var(--step));
+        --turn-gap: clamp(calc(8 * var(--step)), 7vh, calc(21 * var(--step)));
+        row-gap: round(nearest, var(--turn-gap), var(--step));
+        grid-template-areas:
+            "tg  tg    tg    tg    tg    tg    .     .     .     .     .     ."
+            ".   .     snail snail snail snail snail snail peek  peek  peek  peek"
+            ".   .     .     .     .     core  core  core  core  core  core  core"
+            ".   .     video video video video music music music music music music"
+            "lab lab   lab   .     rec   rec   rec   rec   rec   rec   rec   rec";
+    }
+    [data-layout="spiral"] .brand { column-gap: var(--item-gap); }
+    [data-layout="spiral"] .brand-break { display: none; }
+    [data-layout="spiral"] .wordmark { --fitting-mark: calc(100cqi / 10.17); }
+    [data-layout="spiral"] li:nth-child(odd) .sub { max-inline-size: 17ch; }
+}
+@container spiral-sheet (min-width: 64rem) {
+    [data-layout="spiral"] .safe {
+        --gutter: calc(12 * var(--step));
+        --logo-size: calc(15 * var(--step));
+        --mark-size: calc(12 * var(--step));
+        --title-size: calc(6 * var(--step));
+    }
+}
+@container spiral-sheet (min-width: 70rem) {
+    [data-layout="spiral"] .menu li:nth-child(1) { grid-column: 7 / 11; }
+    [data-layout="spiral"] .menu li:nth-child(2) { grid-column: 4 / 7; }
+    [data-layout="spiral"] .menu li:nth-child(4) { grid-column: 9 / 12; }
+}
+/* At large text zoom, give each pair the width of the sheet to wrap in. */
+@container spiral-sheet (max-width: 19rem) {
+    [data-layout="spiral"] .safe {
+        --gutter: var(--step);
+        --logo-size: calc(5 * var(--step));
+    }
+    [data-layout="spiral"] .safe :is(.brand, .menu li) { grid-column: 1 / -1; }
+    [data-layout="spiral"] .brand { column-gap: var(--step); }
+    [data-layout="spiral"] .wordmark {
+        font-size: max(calc(var(--title-size) + var(--step)), min(var(--mark-size), round(down, var(--fitting-mark), var(--step))));
+        overflow-wrap: anywhere;
+    }
+    [data-layout="spiral"] .word { min-width: 0; overflow-wrap: anywhere; }
+    [data-layout="spiral"] li:nth-child(odd) .sub {
+        flex: 0 0 40%;
+        min-inline-size: 0;
+        overflow-wrap: anywhere;
+    }
+}

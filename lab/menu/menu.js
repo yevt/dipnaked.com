@@ -1,7 +1,7 @@
 import { TearSolver } from '../membrane/tear/solver.js';
 import { createTearRenderer } from '../membrane/tear/renderer.js';
 import { addPreview } from './preview.js';
-import { alternateDisplayType } from './display-type.js';
+import { alternateDisplayType, fitSlogan } from './display-type.js';
 
 const sheet = document.querySelector('.sheet');
 const root = document.documentElement;
@@ -238,4 +238,5 @@ async function enableMenu() {
 }
 
 alternateDisplayType(sheet);
+fitSlogan(sheet.querySelector('.brand'));
 enableMenu().catch(error => console.warn('Меню работает в режиме обычных ссылок.', error));
