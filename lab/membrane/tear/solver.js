@@ -1,5 +1,7 @@
 // Top-down variant of the polar Verlet membrane from ../intro/membrane.js.
 // The renderer owns projection. All distances here are in material space.
+import { perforate } from './cut-mesh.js';
+
 const DT = 1 / 120;
 export const PATCH_RADIUS = 4;
 export const tearDefaults = Object.freeze({
@@ -123,15 +125,19 @@ function buildMembrane(options) {
             seams.push({ a, b, ja: 3 * a, jb: 3 * b, wa, wb: 1 - wa, broken: false, contactTime: 0,
                 threshold: 0.82 + 0.36 * rng(), ring: r, inner: (r - 1) * segments + s,
                 gauge: Math.max(0.014, ringRadius(r) * 2 * Math.PI / segments),
-                hoopA: hoop[Math.max(0, r - 1) * segments + s], hoopB: hoop[Math.max(0, r - 1) * segments + prev],
+                hoopA: constraints[hoop[Math.max(0, r - 1) * segments + s]],
+                hoopB: constraints[hoop[Math.max(0, r - 1) * segments + prev]],
             });
         }
     }
     const triangles = Uint16Array.from(faces);
     const rim = Uint16Array.from({ length: segments }, (_, s) => vertex(rings, s));
-    return { home, pos: home.slice(), prev: home.slice(), inverseMass, dampingJitter, count, rim,
+    const mesh = { home, pos: home.slice(), prev: home.slice(), inverseMass, dampingJitter, count, rim,
         nodeArea: weights,
-        constraints, seams, triangles, visible: new Uint8Array(triangles.length / 3).fill(1) };
+        constraints, seams, welds: seams.filter(s => s.ring), triangles,
+        visible: new Uint8Array(triangles.length / 3).fill(1) };
+    return options.cutouts?.hasHoles
+        ? perforate(mesh, options.cutouts, options.pixelsPerUnit ?? 200, rings, segments) : mesh;
 }
 
 export class TearSolver {
@@ -174,20 +180,22 @@ export class TearSolver {
     // would leave numerical pinholes around that high-valence vertex.
     refreshTipGroups() {
         const segments = this.options.segments;
-        const firstCut = this.seams.slice(0, segments).findIndex(s => s.broken);
+        const firstCut = this.seams.slice(0, segments).findIndex(s => s.broken || s.absent);
         const first = firstCut < 0 ? 0 : firstCut;
         this.tipGroups = [];
         let group;
         for (let k = 0; k < segments; k++) {
             const seam = this.seams[(first + k) % segments];
-            if (k === 0 || seam.broken) {
+            if (k === 0 || seam.broken || seam.absent) {
                 group = { nodes: [], mass: 0 };
                 this.tipGroups.push(group);
             }
+            if (!this.nodeArea[seam.a]) continue;
             const mass = 1 / this.inverseMass[seam.a];
             group.nodes.push({ j: seam.ja, mass });
             group.mass += mass;
         }
+        this.tipGroups = this.tipGroups.filter(g => g.mass > 0);
     }
 
     heal() {
@@ -216,6 +224,7 @@ export class TearSolver {
         this.integrate();
         this.relax();
         if (this.closing) this.limitReturnHeight();
+        if (this.lipFollowers) this.followCutEdges();
         this.updateSeams();
         if (this.phase === 'heal') this.checkRest();
     }
@@ -236,10 +245,31 @@ export class TearSolver {
             starts.set(Math.floor(azimuth) % segments, length);
             azimuth += segments * width / total;
         }
+        if (this.options.cutouts?.coverage(0, 0) < .5) {
+            // Air enters through the existing opening. At each exposed end of
+            // the stroke, its longer reach concentrates load on the first ligament.
+            const firstBank = new Array(segments);
+            for (let i = 0; i < this.seams.length; i++) {
+                const direction = i % segments;
+                if (!firstBank[direction] && !this.seams[i].absent) firstBank[direction] = this.seams[i];
+            }
+            const spread = Math.floor(segments / (count * 3));
+            for (const direction of starts.keys()) {
+                let best, score = -Infinity;
+                for (let offset = -spread; offset <= spread; offset++) {
+                    const bank = firstBank[(direction + offset + segments) % segments];
+                    if (!bank) continue;
+                    const reach = this.radius[bank.a] / (1 + .12 * Math.abs(offset));
+                    if (reach > score) { best = bank; score = reach; }
+                }
+                if (best) best.exposedTip = true;
+            }
+            return;
+        }
         for (let i = 0; i < this.seams.length; i++) {
             const seam = this.seams[i];
             const length = starts.get(i % segments);
-            if (length !== undefined && this.radius[seam.a] <= length) {
+            if (!seam.absent && length !== undefined && this.radius[seam.a] <= length) {
                 seam.broken = true;
                 this.brokenCount++;
             }
@@ -258,9 +288,10 @@ export class TearSolver {
             const ux = pos[b] - pos[a], uy = pos[b + 1] - pos[a + 1], uz = pos[b + 2] - pos[a + 2];
             const vx = pos[c] - pos[a], vy = pos[c + 1] - pos[a + 1], vz = pos[c + 2] - pos[a + 2];
             // The unnormalised cross product also weights the force normal by area.
-            const nx = uy * vz - uz * vy;
-            const ny = uz * vx - ux * vz;
-            const nz = ux * vy - uy * vx;
+            const area = this.faceFraction ? this.faceFraction[face / 3] : 1;
+            const nx = (uy * vz - uz * vy) * area;
+            const ny = (uz * vx - ux * vz) * area;
+            const nz = (ux * vy - uy * vx) * area;
             for (let corner = 0; corner < 3; corner++) {
                 const j = 3 * triangles[face + corner];
                 normals[j] += nx;
@@ -268,8 +299,8 @@ export class TearSolver {
                 normals[j + 2] += nz;
             }
         }
-        for (const seam of this.seams) {
-            if (seam.broken || seam.ring === 0) continue;
+        for (const seam of this.welds) {
+            if (seam.broken || seam.parent?.broken) continue;
             for (let axis = 0; axis < 3; axis++) {
                 const a = seam.ja + axis, b = seam.jb + axis;
                 normals[a] += normals[b];
@@ -291,6 +322,7 @@ export class TearSolver {
         const coneSlope = opt.coneSlope * aperture;
         const apex = opt.nozzleRadius / opt.coneSlope;
         for (let i = 0; i < this.count; i++) {
+            if (!this.nodeArea[i]) continue;
             const j = i * 3;
             const x = pos[j], y = pos[j + 1], z = pos[j + 2];
             const r2 = x * x + z * z;
@@ -376,6 +408,7 @@ export class TearSolver {
 
     relax() {
         const { constraints, pos } = this;
+        this.localStrain?.fill(0);
         // Original latex J-curve, cached once per fixed step.
         for (const c of constraints) {
             if (c.bend) {
@@ -385,6 +418,10 @@ export class TearSolver {
                 const x = pos[b] - pos[a], y = pos[b + 1] - pos[a + 1], z = pos[b + 2] - pos[a + 2];
                 const strain = Math.sqrt(x * x + y * y + z * z) / c.rest - 1;
                 c.strain = strain;
+                if (this.localStrain) {
+                    this.localStrain[c.a] = Math.max(this.localStrain[c.a], strain);
+                    this.localStrain[c.b] = Math.max(this.localStrain[c.b], strain);
+                }
                 const knee = Math.min(1, Math.max(0, (strain - 0.1) / 0.6));
                 const stiffness = strain > 0 ? 0.03 + 0.92 * knee ** 2.2 : 0.03 * 0.15;
                 c.k = Math.min(1, stiffness * c.gw) * c.stiffness;
@@ -406,8 +443,8 @@ export class TearSolver {
                 pos[b + 1] -= right * y;
                 pos[b + 2] -= right * z;
             }
-            for (const seam of this.seams) {
-                if (seam.broken || seam.ring === 0) continue;
+            for (const seam of this.welds) {
+                if (seam.broken || seam.parent?.broken) continue;
                 const a = seam.ja, b = seam.jb;
                 for (let k = 0; k < 3; k++) {
                     const delta = pos[b + k] - pos[a + k];
@@ -434,16 +471,32 @@ export class TearSolver {
         }
     }
 
+    followCutEdges() {
+        const { lipFollowers, home, pos, prev } = this;
+        for (let i = 0; i < lipFollowers.length; i += 2) {
+            const edge = lipFollowers[i], bank = lipFollowers[i + 1];
+            for (let k = 0; k < 3; k++) {
+                const offset = home[edge + k] - home[bank + k];
+                pos[edge + k] = pos[bank + k] + offset;
+                prev[edge + k] = prev[bank + k] + offset;
+            }
+        }
+    }
+
     updateSeams() {
-        const { pos, prev, seams, constraints, closing } = this;
+        const { pos, prev, seams, closing } = this;
         // Inspect outer tips first: stress can advance a crack only from an
         // existing opening. Intact material away from a tip stays connected.
         for (let i = seams.length - 1; i >= 0; i--) {
             const seam = seams[i], a = seam.ja, b = seam.jb;
+            if (seam.absent) continue;
             if (!seam.broken) {
                 if (closing) continue;
-                if (seam.inner < 0 || !seams[seam.inner].broken) continue;
-                const tensile = 0.5 * (constraints[seam.hoopA].strain + constraints[seam.hoopB].strain);
+                const inner = this.localStrain ? seam.inwardBank : seams[seam.inner];
+                if (!inner?.broken && !(seam.exposedTip && this.phase === 'blow')) continue;
+                const tensile = this.localStrain && (seam.atCut || seam.hoopA.strain === undefined || seam.hoopB.strain === undefined)
+                    ? .5 * (this.localStrain[seam.a] + this.localStrain[seam.b])
+                    : .5 * (seam.hoopA.strain + seam.hoopB.strain);
                 if (tensile > this.options.tearStrain * seam.threshold) {
                     seam.broken = true;
                     seam.contactTime = 0;

@@ -3,14 +3,13 @@ import { captureSheet } from "./sheet-texture.js";
 const vertexSource = `
     attribute vec3 home, position, normal;
     uniform float camera, radius;
-    uniform vec4 framing;
-    uniform bool suppliedTexture;
+    uniform vec4 framing, textureFrame;
     varying vec2 uv;
     varying float depth;
     varying vec3 surfaceNormal;
     void main() {
         vec2 rest = home.xz / radius;
-        uv = (suppliedTexture ? rest : rest * framing.xy + framing.zw) * 0.5 + 0.5;
+        uv = (rest * textureFrame.xy + textureFrame.zw) * 0.5 + 0.5;
         surfaceNormal = normalize(normal);
         depth = -position.y;
         // Perspective centred on the puncture. At rest the projection is 1:1.
@@ -29,6 +28,7 @@ const fragmentSource = `
     uniform sampler2D paper;
     uniform vec3 upperPaper, lowerPaper;
     uniform float paperLevel;
+    uniform bool perforated;
     varying vec2 uv;
     varying float depth;
     varying vec3 surfaceNormal;
@@ -41,15 +41,14 @@ const fragmentSource = `
         float d = max(depth, 0.0);
         float sky = 1.0 / (1.0 + 0.85 * d * d);
         float shade = sky * (0.57 + 0.43 * diffuse);
-        // The front carries the ink. The matte back keeps the colour of the
-        // stock at its original position, including material pulled in from offscreen.
+        // The same opening is visible from both sides and writes no depth.
         vec3 stock = uv.y < paperLevel ? upperPaper : lowerPaper;
-        vec3 material = stock * 0.91;
-        if (gl_FrontFacing) {
-            bool onTexture = all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0)));
-            material = onTexture ? texture2D(paper, uv).rgb : stock;
-        }
-        gl_FragColor = vec4(material * shade, 1.0);
+        bool onTexture = all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0)));
+        vec4 sampleStock = onTexture ? texture2D(paper, uv) : vec4(stock, 1.0);
+        float coverage = perforated ? sampleStock.a : 1.0;
+        if (coverage < 0.004) discard;
+        vec3 material = gl_FrontFacing ? sampleStock.rgb : stock * 0.91 * coverage;
+        gl_FragColor = vec4(material * shade, coverage);
     }
 `;
 
@@ -87,13 +86,14 @@ function vertexBuffer(gl, program, name, data, usage) {
 
 // The area-weighted sum joins the lighting across intact triangles without
 // smoothing the silhouettes of the overlapping, torn parts.
-function updateNormals(out, pos, indices) {
+function updateNormals(out, pos, indices, fractions) {
     out.fill(0);
     for (let i = 0; i < indices.length; i += 3) {
         const a = indices[i] * 3, b = indices[i + 1] * 3, c = indices[i + 2] * 3;
         const ux = pos[b] - pos[a], uy = pos[b + 1] - pos[a + 1], uz = pos[b + 2] - pos[a + 2];
         const vx = pos[c] - pos[a], vy = pos[c + 1] - pos[a + 1], vz = pos[c + 2] - pos[a + 2];
-        const x = uy * vz - uz * vy, y = uz * vx - ux * vz, z = ux * vy - uy * vx;
+        const area = fractions ? fractions[i / 3] : 1;
+        const x = (uy * vz - uz * vy) * area, y = (uz * vx - ux * vz) * area, z = (ux * vy - uy * vx) * area;
         out[a] += x; out[a + 1] += y; out[a + 2] += z;
         out[b] += x; out[b + 1] += y; out[b + 2] += z;
         out[c] += x; out[c + 1] += y; out[c + 2] += z;
@@ -103,8 +103,8 @@ function updateNormals(out, pos, indices) {
 // Both banks of an intact seam describe one surface. Once it splits, each
 // bank retains the normal of its own material faces and can turn independently.
 function weldNormals(out, solver) {
-    for (const { ja, jb, ring, broken } of solver.seams) {
-        if (broken || ring === 0) continue;
+    for (const { ja, jb, broken, parent } of solver.welds) {
+        if (broken || parent?.broken) continue;
         for (let k = 0; k < 3; k++) {
             const sum = out[ja + k] + out[jb + k];
             out[ja + k] = out[jb + k] = sum;
@@ -124,8 +124,9 @@ function weldNormals(out, solver) {
 
 // The hit test uses precisely the camera and the surviving faces of the last
 // rendered mesh. Project lazily since most frames have no pointer activity.
-function meshHitTest(pos, indices, camera, radius, cx, cy, size) {
+function meshHitTest(pos, home, indices, camera, radius, cx, cy, size, mask) {
     const projected = new Float32Array(pos.length / 3 * 2);
+    const inverseW = mask && new Float32Array(pos.length / 3);
     let stale = true;
     return {
         invalidate() { stale = true; },
@@ -136,6 +137,7 @@ function meshHitTest(pos, indices, camera, radius, cx, cy, size) {
             if (stale) {
                 for (let i = 0, p = 0; i < pos.length; i += 3, p += 2) {
                     const scale = camera / (camera - pos[i + 1]);
+                    if (inverseW) inverseW[i / 3] = scale;
                     projected[p] = pos[i] * scale;
                     projected[p + 1] = pos[i + 2] * scale;
                 }
@@ -152,7 +154,15 @@ function meshHitTest(pos, indices, camera, radius, cx, cy, size) {
                 const bc = (cx - bx) * (y - by) - (cy - by) * (x - bx);
                 const ca = (ax - cx) * (y - cy) - (ay - cy) * (x - cx);
                 if (ab + bc + ca === 0) continue;
-                if ((ab >= 0 && bc >= 0 && ca >= 0) || (ab <= 0 && bc <= 0 && ca <= 0)) return true;
+                if (!((ab >= 0 && bc >= 0 && ca >= 0) || (ab <= 0 && bc <= 0 && ca <= 0))) continue;
+                if (!mask) return true;
+                // Interpolate rest UVs with the same perspective division as WebGL.
+                // A hole in the nearest fold can have solid paper behind it.
+                const ia = indices[i], ib = indices[i + 1], ic = indices[i + 2];
+                const wa = bc * inverseW[ia], wb = ca * inverseW[ib], wc = ab * inverseW[ic], sum = wa + wb + wc;
+                const u = (wa * home[3 * ia] + wb * home[3 * ib] + wc * home[3 * ic]) / sum;
+                const v = (wa * home[3 * ia + 2] + wb * home[3 * ib + 2] + wc * home[3 * ic + 2]) / sum;
+                if (mask.coverage(u, v) >= .5) return true;
             }
             return false;
         },
@@ -168,8 +178,9 @@ function extendSheet(solver) {
     const home = new Float32Array((count + segments) * 3);
     home.set(solver.home);
     const borderCount = segments * 6;
-    const indices = new Uint16Array(borderCount + solver.triangles.length);
-    indices.set(solver.triangles, borderCount);
+    const faces = solver.triangles;
+    const indices = new faces.constructor(borderCount + faces.length);
+    indices.set(faces, borderCount);
     for (let i = 0; i < segments; i++) {
         const next = (i + 1) % segments;
         const a = solver.rim[i], b = solver.rim[next];
@@ -181,7 +192,7 @@ function extendSheet(solver) {
     return { home, pos: home.slice(), indices, borderCount };
 }
 
-export function createTearRenderer(canvas, solver, { sheet, texture, paperStock, cx, cy, size, cameraDistance = 4 }) {
+export function createTearRenderer(canvas, solver, { sheet, texture, surface, paperStock, cx, cy, size, cameraDistance = 4 }) {
     // Allocate pixels only for the part of the physical patch on screen.
     // The full camera framing below keeps the optical axis at the click.
     const viewport = document.documentElement;
@@ -208,8 +219,15 @@ export function createTearRenderer(canvas, solver, { sheet, texture, paperStock,
         gl.uniform1f(gl.getUniformLocation(program, "camera"), cameraDistance);
         gl.uniform4f(gl.getUniformLocation(program, "framing"), size / rect.width, size / rect.height,
             2 * (cx - rect.left) / rect.width - 1, 2 * (cy - rect.top) / rect.height - 1);
-        gl.uniform1i(gl.getUniformLocation(program, "suppliedTexture"), texture ? 1 : 0);
+        const source = surface?.bounds ?? rect;
+        const textureFrame = texture ? [1, 1, 0, 0] : [size / source.width, size / source.height,
+            2 * (cx - source.left) / source.width - 1, 2 * (cy - source.top) / source.height - 1];
+        gl.uniform4fv(gl.getUniformLocation(program, "textureFrame"), textureFrame);
+        gl.uniform1i(gl.getUniformLocation(program, "perforated"), surface ? 1 : 0);
         const { home, pos, indices, borderCount } = extendSheet(solver);
+        const wide = indices instanceof Uint32Array;
+        if (wide && !gl.getExtension("OES_element_index_uint")) throw new Error("32-bit membrane indices unavailable");
+        const indexType = wide ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
         vertexBuffer(gl, program, "home", home, gl.STATIC_DRAW);
         const positions = vertexBuffer(gl, program, "position", pos, gl.DYNAMIC_DRAW);
         const normals = new Float32Array(home.length);
@@ -222,34 +240,53 @@ export function createTearRenderer(canvas, solver, { sheet, texture, paperStock,
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        let skin = surface?.canvas;
+        if (skin && Math.max(skin.width, skin.height) > limit) {
+            const scale = limit / Math.max(skin.width, skin.height);
+            const smaller = document.createElement('canvas');
+            smaller.width = Math.max(1, Math.round(skin.width * scale));
+            smaller.height = Math.max(1, Math.round(skin.height * scale));
+            smaller.getContext('2d').drawImage(skin, 0, 0, smaller.width, smaller.height);
+            skin = smaller;
+        }
         function refreshTexture() {
             const stock = paperStock?.();
             gl.uniform3fv(gl.getUniformLocation(program, "upperPaper"), stock?.above ?? [1, 1, 1]);
             gl.uniform3fv(gl.getUniformLocation(program, "lowerPaper"), stock?.below ?? [1, 1, 1]);
             gl.uniform1f(gl.getUniformLocation(program, "paperLevel"), stock ? (stock.level - rect.top) / rect.height : 0);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE,
-                texture || captureSheet(sheet, rect, canvas.width, canvas.height));
+            const format = surface ? gl.RGBA : gl.RGB;
+            gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, !!surface);
+            gl.texImage2D(gl.TEXTURE_2D, 0, format, format, gl.UNSIGNED_BYTE,
+                skin || texture || captureSheet(sheet, rect, canvas.width, canvas.height));
         }
         refreshTexture();
+        if (surface) {
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        }
         gl.enable(gl.DEPTH_TEST);
         gl.frontFace(gl.CCW);
         gl.viewport(0, 0, canvas.width, canvas.height);
-        const hitTest = meshHitTest(pos, indices, cameraDistance, radius, cx, cy, size);
+        const hitTest = meshHitTest(pos, home, indices, cameraDistance, radius, cx, cy, size, surface?.mask);
         function draw() {
             pos.set(solver.pos);
             gl.bindBuffer(gl.ARRAY_BUFFER, positions);
             gl.bufferSubData(gl.ARRAY_BUFFER, 0, pos);
-            updateNormals(normals, pos, indices);
+            updateNormals(normals, pos, solver.faceFraction ? solver.triangles : indices, solver.faceFraction);
             weldNormals(normals, solver);
+            if (solver.lipFollowers) for (let i = 0; i < solver.lipFollowers.length; i += 2) {
+                const edge = solver.lipFollowers[i], bank = solver.lipFollowers[i + 1];
+                normals.copyWithin(edge, bank, bank + 3);
+            }
             gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
             gl.bufferSubData(gl.ARRAY_BUFFER, 0, normals);
             gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
             // The real DOM is already visible outside the simulated sheet.
             // The static continuation only needs to write its surface depth.
             gl.colorMask(false, false, false, false);
-            gl.drawElements(gl.TRIANGLES, borderCount, gl.UNSIGNED_SHORT, 0);
+            gl.drawElements(gl.TRIANGLES, borderCount, indexType, 0);
             gl.colorMask(true, true, true, true);
-            gl.drawElements(gl.TRIANGLES, indices.length - borderCount, gl.UNSIGNED_SHORT, borderCount * 2);
+            gl.drawElements(gl.TRIANGLES, indices.length - borderCount, indexType, borderCount * indices.BYTES_PER_ELEMENT);
             hitTest.invalidate();
         }
         draw();

@@ -53,7 +53,7 @@ function overlaps(a, b) {
     return a.right > b.left && a.left < b.right && a.bottom > b.top && a.top < b.bottom;
 }
 
-export function captureSheet(sheet, bounds, width, height) {
+export function captureSheet(sheet, bounds, width, height, cutouts = false) {
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
@@ -71,13 +71,15 @@ export function captureSheet(sheet, bounds, width, height) {
     let node;
     while ((node = walker.nextNode())) {
         if (node.nodeType === Node.TEXT_NODE) {
+            ctx.globalCompositeOperation = cutouts && node.parentElement.closest("[data-cutout]") ? "destination-out" : "source-over";
             drawTextNode(ctx, range, node, bounds);
         } else if (node instanceof HTMLImageElement && node.complete && node.naturalWidth) {
             const rect = node.getBoundingClientRect();
             if (!overlaps(rect, bounds)) continue;
             const style = getComputedStyle(node);
             if (style.visibility !== "visible") continue;
-            ctx.globalCompositeOperation = style.mixBlendMode === "difference" ? "difference" : "source-over";
+            ctx.globalCompositeOperation = cutouts && node.closest("[data-cutout]") ? "destination-out"
+                : style.mixBlendMode === "difference" ? "difference" : "source-over";
             ctx.drawImage(node, rect.left, rect.top, rect.width, rect.height);
             ctx.globalCompositeOperation = "source-over";
         }

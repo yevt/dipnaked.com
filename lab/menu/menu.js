@@ -1,7 +1,7 @@
-import { TearSolver } from '../membrane/tear/solver.js';
+import { PATCH_RADIUS, TearSolver } from '../membrane/tear/solver.js';
+import { captureCutSurface } from '../membrane/tear/cut-surface.js';
 import { createTearRenderer } from '../membrane/tear/renderer.js';
 import { addPreview } from './preview.js';
-import { enableStripes } from './surface.js';
 import { alternateDisplayType } from './display-type.js';
 
 const sheet = document.querySelector('.sheet');
@@ -78,11 +78,6 @@ function reset() {
     frame = 0;
 }
 
-function refreshTexture() {
-    active?.renderer?.refreshTexture();
-    healing?.renderer?.refreshTexture();
-}
-
 function onScroll() {
     // Focusing a menu item may queue a scroll event before Enter opens it.
     // Discard a snapshot only if the sheet has moved since that snapshot.
@@ -142,13 +137,14 @@ function openPatch(cx, cy, trigger, preview) {
         canvas.setAttribute('aria-hidden', 'true');
         element.append(canvas);
         try {
+            const surface = captureCutSurface(sheet, cx, cy, unit, PATCH_RADIUS);
             const solver = new TearSolver({
                 seed: crypto.getRandomValues(new Uint32Array(1))[0],
-                pixelsPerUnit: unit,
+                pixelsPerUnit: unit, cutouts: surface.mask,
             });
             const size = 2 * unit * solver.radiusUnits;
             element.style.setProperty('--bed-size', size * 0.98 + 'px');
-            patch.renderer = createTearRenderer(canvas, solver, { sheet, cx, cy, size });
+            patch.renderer = createTearRenderer(canvas, solver, { sheet, surface, cx, cy, size });
             patch.solver = solver;
             canvas.addEventListener('webglcontextlost', () => {
                 if (active !== patch && healing !== patch) return;
@@ -188,7 +184,7 @@ async function enableMenu() {
     root.classList.add('tear-ready');
 
     document.addEventListener('click', event => {
-        if (event.defaultPrevented || event.button !== 0 || event.target.closest('.surface-picker')) return;
+        if (event.defaultPrevented || event.button !== 0) return;
         if (active) {
             // Keyboard activation of a content link has no pointer coordinates.
             if (event.detail === 0 && active.element.contains(event.target.closest('a[href]'))) return;
@@ -235,9 +231,9 @@ async function enableMenu() {
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('pagehide', reset);
     reducedMotion.addEventListener('change', reset);
-    document.fonts.addEventListener('loadingdone', refreshTexture);
+    document.fonts.addEventListener('loadingdone', reset);
+    sheet.querySelector('.logo').addEventListener('load', reset);
 }
 
 alternateDisplayType(sheet);
-enableStripes(sheet, refreshTexture);
 enableMenu().catch(error => console.warn('Меню работает в режиме обычных ссылок.', error));
