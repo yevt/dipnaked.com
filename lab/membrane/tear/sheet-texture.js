@@ -12,6 +12,16 @@ function drawTextNode(ctx, range, node, bounds) {
     ctx.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
     ctx.letterSpacing = style.letterSpacing === "normal" ? "0px" : style.letterSpacing;
     ctx.fillStyle = style.color;
+    // A two-tone sheet may invert the ink partway through a text run.
+    // Use the containing label's origin even when this node is an alternate glyph.
+    const split = node.parentElement.closest("[data-split-ink]");
+    if (split) {
+        const stop = split.getBoundingClientRect().top + parseFloat(style.getPropertyValue("--ink-stop"));
+        const ink = ctx.createLinearGradient(0, stop - 1, 0, stop + 1);
+        ink.addColorStop(0.5, style.getPropertyValue("--ink-above").trim());
+        ink.addColorStop(0.5, style.getPropertyValue("--ink-below").trim());
+        ctx.fillStyle = ink;
+    }
     const ascent = ctx.measureText(value).fontBoundingBoxAscent;
     if (boxes.length === 1) {
         ctx.fillText(value.trim(), boxes[0].left, Math.round(boxes[0].top + ascent));
@@ -64,7 +74,12 @@ export function captureSheet(sheet, bounds, width, height) {
             drawTextNode(ctx, range, node, bounds);
         } else if (node instanceof HTMLImageElement && node.complete && node.naturalWidth) {
             const rect = node.getBoundingClientRect();
-            if (overlaps(rect, bounds)) ctx.drawImage(node, rect.left, rect.top, rect.width, rect.height);
+            if (!overlaps(rect, bounds)) continue;
+            const style = getComputedStyle(node);
+            if (style.visibility !== "visible") continue;
+            ctx.globalCompositeOperation = style.mixBlendMode === "difference" ? "difference" : "source-over";
+            ctx.drawImage(node, rect.left, rect.top, rect.width, rect.height);
+            ctx.globalCompositeOperation = "source-over";
         }
     }
     return canvas;

@@ -6,9 +6,35 @@
     src: url("assets/BlackSquare-v69.woff2") format("woff2");
     font-weight: 400;
     font-variation-settings: "FILL" 0, "ROND" 100;
-    font-feature-settings: "ss02" 1;
     font-display: block;
 }
+
+/* The small faces select the original ss02 glyphs by family name in both DOM and Canvas2D. */
+@font-face {
+    font-family: "Black Square 2";
+    src: url("assets/BlackSquare-v69-form2.woff2") format("woff2");
+    font-display: block;
+}
+@font-face {
+    font-family: "Black Square 3";
+    src: url("assets/BlackSquare-v69-form3.woff2") format("woff2");
+    font-display: block;
+}
+@font-face {
+    font-family: "Black Square 4";
+    src: url("assets/BlackSquare-v69-form4.woff2") format("woff2");
+    font-display: block;
+}
+@font-face {
+    font-family: "Black Square 5";
+    src: url("assets/BlackSquare-v69-form5.woff2") format("woff2");
+    font-display: block;
+}
+.sequenced-type :is(.wordmark, .word) { font-feature-settings: normal; }
+[data-glyph-form="2"] { font-family: "Black Square 2", "Black Square", sans-serif; }
+[data-glyph-form="3"] { font-family: "Black Square 3", "Black Square", sans-serif; }
+[data-glyph-form="4"] { font-family: "Black Square 4", "Black Square", sans-serif; }
+[data-glyph-form="5"] { font-family: "Black Square 5", "Black Square", sans-serif; }
 
 /* При кегле 16 px прописная системной кириллицы занимает около 12 px.
    Метрики запасного шрифта согласованы со строкой Satoshi. */
@@ -37,7 +63,7 @@
     --gutter: calc(4 * var(--step));
     --logo-size: calc(10 * var(--step));
     --mark-size: calc(7 * var(--step));
-    --logo-name-gap: calc(3 * var(--step));
+    --slogan-logo-gap: calc(3 * var(--step));
     --name-slogan-gap: var(--step);
     --section-gap: calc(10 * var(--step));
     --item-gap: calc(6 * var(--step));
@@ -91,13 +117,45 @@ ul { list-style: none; margin: 0; padding: 0; }
 h1, p { margin: 0; }
 img { display: block; }
 
+.surface-field {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+.surface-field[hidden] { display: none; }
+.surface-picker:not([hidden]) {
+    position: fixed;
+    z-index: 3;
+    right: max(8px, env(safe-area-inset-right));
+    bottom: max(8px, env(safe-area-inset-bottom));
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 12px;
+    border: 1px solid #b5b5b1;
+    border-radius: 4px;
+    background: var(--paper);
+    color: var(--ink);
+    font: 400 14px / 1.2 var(--copy-family);
+    cursor: pointer;
+}
+.surface-picker input { margin: 0; accent-color: var(--ink); }
+@media (max-width: 40em) {
+    body:has(.surface-picker:not([hidden])) { --picker-room: calc(56px + env(safe-area-inset-bottom)); }
+}
+
 .sheet {
     position: relative;
-    min-height: 100dvh;
-    padding-block: var(--page-inset);
+    min-height: calc(100dvh + var(--picker-room, 0px));
+    padding-block: var(--page-inset) calc(var(--page-inset) + var(--picker-room, 0px));
 }
 .safe {
     position: relative;
+    /* Match the grayscale edges of type printed on the moving membrane. */
+    will-change: transform;
     display: grid;
     row-gap: var(--section-gap);
     width: min(100%, 78rem);
@@ -135,10 +193,27 @@ img { display: block; }
     letter-spacing: 0.3ch;
     color: var(--faint);
 }
-.logo {
+.logo-slot {
+    /* The highest wall extends 88.75 units above the 256-unit grid slot. */
+    --overhang: calc(var(--logo-size) * .347);
+    position: relative;
     width: var(--logo-size);
     height: var(--logo-size);
-    margin-block-end: var(--logo-name-gap);
+    margin-block: calc(var(--slogan-logo-gap) + var(--overhang)) var(--overhang);
+    justify-self: center;
+}
+@supports (width: round(nearest, 1px, 1px)) {
+    .logo-slot { --overhang: round(nearest, calc(var(--logo-size) * .347), var(--step)); }
+}
+.logo {
+    /* Center the 448-unit image over the 256-unit slot. This keeps one unit
+       of the logo the same size as one unit of the optional print. */
+    position: absolute;
+    inset: -37.5% auto auto -37.5%;
+    width: 175%;
+    height: 175%;
+    /* Keep the thin walls on the same raster layer while the sheet is torn. */
+    will-change: transform;
 }
 
 .item {
@@ -176,7 +251,6 @@ img { display: block; }
     justify-content: center;
     text-align: left;
 }
-[data-layout="a"] .logo { justify-self: center; }
 /* Надпись задаёт ширину даже при увеличенном шрифте. Слоган и меню переносятся внутри. */
 [data-layout="a"] :is(.slogan, .menu) { contain: inline-size; }
 [data-layout="a"] .slogan { justify-self: stretch; }
@@ -299,7 +373,7 @@ img { display: block; }
     translate: -50% -50%;
     width: var(--bed-size);
     height: var(--bed-size);
-    background: #101010;
+    background: #000;
     border-radius: 50%;
     overflow: hidden;
     pointer-events: auto;
@@ -356,7 +430,7 @@ img { display: block; }
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
-.tear-note .tear-label { grid-area: 2 / 1; padding: 0; color: #bbb; }
+.tear-note .tear-label { grid-area: 2 / 1; padding: 0; color: #bbb; background: transparent; }
 .tear-services { position: absolute; inset: 0; pointer-events: none; }
 .tear-service {
     display: grid;

@@ -1,6 +1,8 @@
 import { TearSolver } from '../membrane/tear/solver.js';
 import { createTearRenderer } from '../membrane/tear/renderer.js';
 import { addPreview } from './preview.js';
+import { enableStripes } from './surface.js';
+import { alternateDisplayType } from './display-type.js';
 
 const sheet = document.querySelector('.sheet');
 const root = document.documentElement;
@@ -74,6 +76,11 @@ function reset() {
     healing = null;
     cancelAnimationFrame(frame);
     frame = 0;
+}
+
+function refreshTexture() {
+    active?.renderer?.refreshTexture();
+    healing?.renderer?.refreshTexture();
 }
 
 function onScroll() {
@@ -181,7 +188,7 @@ async function enableMenu() {
     root.classList.add('tear-ready');
 
     document.addEventListener('click', event => {
-        if (event.defaultPrevented || event.button !== 0) return;
+        if (event.defaultPrevented || event.button !== 0 || event.target.closest('.surface-picker')) return;
         if (active) {
             // Keyboard activation of a content link has no pointer coordinates.
             if (event.detail === 0 && active.element.contains(event.target.closest('a[href]'))) return;
@@ -228,10 +235,9 @@ async function enableMenu() {
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('pagehide', reset);
     reducedMotion.addEventListener('change', reset);
-    document.fonts.addEventListener('loadingdone', () => {
-        active?.renderer?.refreshTexture();
-        healing?.renderer?.refreshTexture();
-    });
+    document.fonts.addEventListener('loadingdone', refreshTexture);
 }
 
+alternateDisplayType(sheet);
+enableStripes(sheet, refreshTexture);
 enableMenu().catch(error => console.warn('Меню работает в режиме обычных ссылок.', error));

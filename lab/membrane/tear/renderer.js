@@ -27,6 +27,8 @@ const fragmentSource = `
     precision mediump float;
     #endif
     uniform sampler2D paper;
+    uniform vec3 upperPaper, lowerPaper;
+    uniform float paperLevel;
     varying vec2 uv;
     varying float depth;
     varying vec3 surfaceNormal;
@@ -39,11 +41,13 @@ const fragmentSource = `
         float d = max(depth, 0.0);
         float sky = 1.0 / (1.0 + 0.85 * d * d);
         float shade = sky * (0.57 + 0.43 * diffuse);
-        // The menu is printed on one side. A fold can expose its matte back.
-        vec3 material = vec3(0.91);
+        // The front carries the ink. The matte back keeps the colour of the
+        // stock at its original position, including material pulled in from offscreen.
+        vec3 stock = uv.y < paperLevel ? upperPaper : lowerPaper;
+        vec3 material = stock * 0.91;
         if (gl_FrontFacing) {
             bool onTexture = all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0)));
-            material = onTexture ? texture2D(paper, uv).rgb : vec3(1.0);
+            material = onTexture ? texture2D(paper, uv).rgb : stock;
         }
         gl_FragColor = vec4(material * shade, 1.0);
     }
@@ -177,7 +181,7 @@ function extendSheet(solver) {
     return { home, pos: home.slice(), indices, borderCount };
 }
 
-export function createTearRenderer(canvas, solver, { sheet, texture, cx, cy, size, cameraDistance = 4 }) {
+export function createTearRenderer(canvas, solver, { sheet, texture, paperStock, cx, cy, size, cameraDistance = 4 }) {
     // Allocate pixels only for the part of the physical patch on screen.
     // The full camera framing below keeps the optical axis at the click.
     const viewport = document.documentElement;
@@ -219,6 +223,10 @@ export function createTearRenderer(canvas, solver, { sheet, texture, cx, cy, siz
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
         function refreshTexture() {
+            const stock = paperStock?.();
+            gl.uniform3fv(gl.getUniformLocation(program, "upperPaper"), stock?.above ?? [1, 1, 1]);
+            gl.uniform3fv(gl.getUniformLocation(program, "lowerPaper"), stock?.below ?? [1, 1, 1]);
+            gl.uniform1f(gl.getUniformLocation(program, "paperLevel"), stock ? (stock.level - rect.top) / rect.height : 0);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE,
                 texture || captureSheet(sheet, rect, canvas.width, canvas.height));
         }
