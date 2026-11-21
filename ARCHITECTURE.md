@@ -3,9 +3,11 @@
 ## Overview
 
 The root `index.html` serves the clockwise menu from `/lab/menu/?layout=trail&sign=under`.
-Activating the wordmark reveals the spiral beneath the sheet. Each of the seven
-sections opens its own preview. The HTML contains the links in reading and tab
-order, so they also work when JavaScript is disabled.
+Below 43rem of usable width it uses the centered, left-aligned menu column, with
+each caption above its heading. Activating the wordmark or slogan reveals the
+spiral beneath the sheet. Each of the seven sections opens its own preview.
+The HTML contains the links in reading and tab order, so they also work when
+JavaScript is disabled.
 
 The homepage uses `/lab/menu/` as its base URL for the shared styles, scripts,
 fonts and preview media. The menu grid is defined in `lab/menu/trail-layout.css`.

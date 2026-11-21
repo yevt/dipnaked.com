@@ -15,11 +15,12 @@
     <script type="module" src="menu.js"></script>
 </head>
 <body>
-    <main class="sheet">
+    <main class="menu-viewport">
+      <div class="sheet">
         <div class="safe">
             <header class="brand">
                 <div class="brand-type">
-                    <h1 class="wordmark"><span data-glyph-form="2">d</span>ip<wbr class="brand-break">nake<span data-glyph-form="final-d">d</span></h1>
+                    <h1 class="wordmark" id="site-name"><span data-glyph-form="2">d</span>ip<wbr class="brand-break">nake<span data-glyph-form="final-d">d</span></h1>
                     <p class="slogan" lang="en">in affair with the abyss</p>
                 </div>
                 <div class="logo-slot">
@@ -51,6 +52,7 @@
                 </ul>
             </nav>
         </div>
+      </div>
     </main>
     <script>
         {
@@ -72,13 +74,15 @@
             if (layout === 'trail') {
                 if (options.get('sign') === 'under') {
                     root.dataset.sign = 'under';
-                    const name = document.querySelector('.wordmark');
+                    const type = document.querySelector('.brand-type');
                     const link = document.createElement('a');
+                    link.className = 'brand-type';
                     link.href = 'assets/spiral-three.svg';
                     link.dataset.preview = 'signature';
+                    link.setAttribute('aria-labelledby', 'site-name');
                     link.setAttribute('aria-description', 'Открыть знак dipnaked');
-                    link.append(...name.childNodes);
-                    name.append(link);
+                    link.append(...type.childNodes);
+                    type.replaceWith(link);
                 }
                 // Reading and keyboard navigation follow the same turn as the lettering.
                 const list = document.querySelector('.menu ul');

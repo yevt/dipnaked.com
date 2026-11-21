@@ -123,7 +123,7 @@ function openPatch(cx, cy, trigger, preview) {
     const element = document.createElement('section');
     element.className = 'tear';
     element.tabIndex = -1;
-    element.setAttribute('aria-label', preview ? (trigger.querySelector('.word') || trigger).textContent : 'Разрыв листа');
+    element.setAttribute('aria-label', preview ? (trigger.querySelector('.word, .wordmark') || trigger).textContent : 'Разрыв листа');
     element.style.setProperty('--unit', unit + 'px');
     element.style.left = cx + 'px';
     element.style.top = cy + 'px';
@@ -195,9 +195,10 @@ async function enableMenu() {
     document.addEventListener('click', event => {
         if (event.defaultPrevented || event.button !== 0) return;
         if (active) {
+            const link = event.target.closest('a[href]');
             // Keyboard activation of a content link has no pointer coordinates.
-            if (event.detail === 0 && active.element.contains(event.target.closest('a[href]'))) return;
-            if (uncovered(active, event.clientX, event.clientY)) return;
+            if (active.element.contains(link) &&
+                (event.detail === 0 || uncovered(active, event.clientX, event.clientY))) return;
             event.preventDefault();
             event.stopPropagation();
             closePatch();
@@ -211,7 +212,7 @@ async function enableMenu() {
         if (trigger && !preview) return;
         event.preventDefault();
         if (trigger && event.detail === 0) {
-            const label = trigger.querySelector('.word') || trigger;
+            const label = trigger.querySelector('.word, .wordmark') || trigger;
             label.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
             const word = textRange(label).getBoundingClientRect();
             openPatch(word.x + word.width / 2, word.y + word.height / 2, trigger, preview);

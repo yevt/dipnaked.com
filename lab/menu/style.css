@@ -213,43 +213,49 @@ img { display: block; }
         --page-inset: calc(14 * var(--step));
     }
 }
-/* The top margin is half the visible width of the spiral, on the four-pixel grid. */
+/* Both vertical menus take their top margin from half the spiral's ink width. */
+:root { --column-inset: calc(var(--logo-size) * 343.5 / 512); }
+@supports (width: round(nearest, 1px, 1px)) {
+    :root { --column-inset: round(nearest, calc(var(--logo-size) * 343.5 / 512), var(--step)); }
+}
 [data-layout="a"] {
-    --spiral-width: calc(var(--logo-size) * 343.5 / 256);
     --gutter: calc(3 * var(--step));
-    --page-inset: calc(var(--spiral-width) / 2);
+    --page-inset: var(--column-inset);
     --center-y: 0px;
     --slogan-end-inset: 5px;
 }
-@supports (width: round(nearest, 1px, 1px)) {
-    [data-layout="a"] {
-        --page-inset: round(nearest, calc(var(--spiral-width) / 2), var(--step));
-    }
-}
-:is([data-layout="a"], [data-layout="void"]) .safe {
+[data-layout="a"] .sheet { container: menu-column / inline-size; }
+[data-layout="void"] .safe {
     width: 100%;
     margin-inline: 0;
     padding-inline: max(var(--gutter), env(safe-area-inset-left, 0px))
                     max(var(--gutter-end, var(--gutter)), env(safe-area-inset-right, 0px));
     grid-template-columns: minmax(0, 1fr);
 }
-[data-layout="a"] .safe {
-    width: fit-content;
-    max-width: 100%;
-    margin-inline: auto;
-    grid-template-columns: minmax(0, max-content);
-}
-@supports (left: round(nearest, 50%, 1px)) {
-    /* The column measures the ink, so its natural width can be fractional. */
-    [data-layout="a"] .safe {
-        margin-inline: 0;
-        left: round(nearest, 50%, 1px);
-        translate: round(nearest, -50%, 1px) var(--center-y);
+@container menu-column (min-width: 0px) {
+    .safe {
+        width: fit-content;
+        max-width: 100%;
+        margin-inline: auto;
+        padding-inline: max(var(--gutter), env(safe-area-inset-left, 0px))
+                        max(var(--gutter), env(safe-area-inset-right, 0px));
+        grid-template-columns: minmax(0, max-content);
     }
+    @supports (left: round(nearest, 50%, 1px)) {
+        /* Keep the ink and its print on the membrane on the same pixels. */
+        .safe {
+            margin-inline: 0;
+            left: round(nearest, 50%, 1px);
+            translate: round(nearest, -50%, 1px) var(--center-y);
+        }
+    }
+    .menu { contain: inline-size; }
+    /* The blank advance after the final d is outside the optical column. */
+    .wordmark { margin-inline-end: -.27em; }
+    .item { align-items: flex-start; }
+    .sub { text-wrap: wrap; }
+    .item:focus-visible { outline-offset: calc(var(--caption-gap) - 1px); }
 }
-[data-layout="a"] .menu { contain: inline-size; }
-/* The blank advance after the final d is outside the optical column. */
-[data-layout="a"] .wordmark { margin-inline-end: -.27em; }
 [data-layout="a"] .logo-slot {
     justify-self: start;
     margin-block-start: calc(var(--separator-gap) - 2 * var(--step) + var(--overhang));
@@ -262,15 +268,15 @@ img { display: block; }
     left: round(nearest, var(--logo-left), 1px);
     will-change: transform;
 }
-:is([data-layout="a"], [data-layout="void"]) .item { align-items: flex-start; }
-:is([data-layout="a"], [data-layout="void"]) .sub { text-wrap: wrap; }
-:is([data-layout="a"], [data-layout="void"]) .item:focus-visible {
+[data-layout="void"] .item { align-items: flex-start; }
+[data-layout="void"] .sub { text-wrap: wrap; }
+[data-layout="void"] .item:focus-visible {
     outline-offset: calc(var(--caption-gap) - 1px);
 }
 
 /* Кромка. На широком листе ширину единственной колонки задаёт надпись. */
-@media (width < 22.5em) {
-    [data-layout="a"] { --title-size: calc(5 * var(--step)); }
+@container menu-column (width < 22.5rem) {
+    .safe { --title-size: calc(5 * var(--step)); }
 }
 
 /* Пропуск. Знак занимает паузу между четвёртой и пятой рубриками. */

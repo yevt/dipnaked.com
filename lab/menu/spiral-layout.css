@@ -9,7 +9,7 @@
     --turn-gap: calc(5 * var(--step));
 }
 [data-layout="spiral"] .sheet {
-    container: spiral-sheet / inline-size;
+    container: spiral-sheet menu-turn / inline-size;
 }
 [data-layout="spiral"] .safe {
     width: min(100%, 100rem);
@@ -30,12 +30,14 @@
         "lab lab   lab   lab   lab   lab   lab   .     .     .     .     .";
 }
 /* The landmark and the list keep their semantics and share the sheet tracks. */
-:is([data-layout="spiral"], [data-layout="trail"]) :is(.menu, .menu ul) {
-    display: grid;
-    grid-area: 1 / 1 / -1 / -1;
-    grid-template-columns: subgrid;
-    grid-template-rows: subgrid;
-    gap: inherit;
+@container menu-turn (min-width: 0px) {
+    :is(.menu, .menu ul) {
+        display: grid;
+        grid-area: 1 / 1 / -1 / -1;
+        grid-template-columns: subgrid;
+        grid-template-rows: subgrid;
+        gap: inherit;
+    }
 }
 [data-layout="spiral"] .brand {
     grid-area: core;
